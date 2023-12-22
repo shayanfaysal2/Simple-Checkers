@@ -6,16 +6,25 @@ public class GameManager : MonoBehaviour
 {
     public GameObject whitePiecePrefab;
     public GameObject blackPiecePrefab;
+    public GameObject whiteKingPrefab;
+    public GameObject blackKingPrefab;
+    public GameObject highlightPrefab;
 
     private const int boardSize = 8;
     private GameObject[,] board = new GameObject[boardSize, boardSize];
 
     public GameObject selectedObject;
+    public Transform movingObject;
+    private Vector3 movingTarget;
 
+    private List<Vector2Int> validMoves = new List<Vector2Int>();
+    private List<GameObject> highlights = new List<GameObject>();
+
+    //debugging
     private void OnGUI()
     {
-        int cellSize = 50; // Adjust the cell size as needed
-        int fontSize = 24; // Adjust the font size as needed
+        int cellSize = 50;
+        int fontSize = 24;
         int startX = 50;
         int startY = 400;
 
@@ -26,25 +35,30 @@ public class GameManager : MonoBehaviour
         {
             for (int j = 0; j < boardSize; j++)
             {
-                int value = -1;
+                int value = 0;
                 if (board[j, i] != null)
                 {
                     if (board[j, i].CompareTag("Black"))
                     {
-                        value = 0;
+                        value = 1;
                     }
                     else if (board[j, i].CompareTag("White"))
                     {
-                        value = 1;
+                        value = -1;
+                    }
+                    else if (board[j, i].CompareTag("BlackKing"))
+                    {
+                        value = 2;
+                    }
+                    else if (board[j, i].CompareTag("WhiteKing"))
+                    {
+                        value = -2;
                     }
                 }
                 
                 string text = value.ToString();
-
-                // Adjust the position based on cell size and array indices
                 int xPos = startX + j * cellSize;
                 int yPos = startY - i * cellSize;
-
                 GUI.Label(new Rect(xPos, yPos, cellSize, cellSize), text, style);
             }
         }
@@ -65,25 +79,28 @@ public class GameManager : MonoBehaviour
             Vector3 worldPosition = Camera.main.ScreenToWorldPoint(mousePos);
 
             //getting grid position
-            int roundedX = (int)Mathf.Round(worldPosition.x);
-            int roundedY = (int)Mathf.Round(worldPosition.y);
+            int roundedX = Mathf.RoundToInt(worldPosition.x);
+            int roundedY = Mathf.RoundToInt(worldPosition.y);
 
             Clicked(roundedX, roundedY);
+        }
+
+        //lerping piece
+        if (movingObject != null)
+        {
+            movingObject.transform.position = Vector3.Lerp(movingObject.transform.position, movingTarget, Time.deltaTime * 8);
         }
     }
 
     void InitializeBoard()
     {
-        // Create alternating white and black pieces
+        //create alternating white and black pieces
         for (int row = 0; row < boardSize; row++)
         {
             for (int col = 0; col < boardSize; col++)
             {
-                //board[row, col] = -1;
-
                 if ((row + col) % 2 == 0)
                 {
-                    // Odd row + odd column or even row + even column
                     if (row < 3)
                     {
                         CreatePiece(whitePiecePrefab, row, col);
@@ -97,31 +114,48 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    void CreatePiece(GameObject prefab, int row, int col)
+    GameObject CreatePiece(GameObject prefab, int row, int col)
     {
         GameObject piece = Instantiate(prefab, new Vector3(col, row), Quaternion.identity);
-        //board[row, col] = prefab == blackPiecePrefab ? 0 : 1;
         board[col, row] = piece;
+        return piece;
     }
 
     void Clicked(int x, int y)
     {
-        
+        //clearing any previous highlights
+        foreach (GameObject highlight in highlights)
+        {
+            Destroy(highlight);
+        }
+        highlights.Clear();
 
         //if invalid position
         if (x < 0 || x > 7 || y < 0 || y > 7)
-            return;
+        return;
 
         print(y + ", " + x);
 
         //performing action on selected object
         if (selectedObject != null)
         {
-            if (IsValidMove(y, x))
+            if (IsValidMove(y, x) > 0)
             {
-                board[(int)selectedObject.transform.position.x, (int)selectedObject.transform.position.y] = null;
-                selectedObject.transform.position = new Vector3(x, y, 0);
+                //capturing
+                if (IsValidMove(y, x) == 2)
+                {
+                    CapturePiece(y, x);
+                }
+                //promoting
+                if (IsValidMove(y, x) == 3)
+                {
+                    PromoteToKing(y, x);
+                }
+
+                board[Mathf.RoundToInt(selectedObject.transform.position.x), Mathf.RoundToInt(selectedObject.transform.position.y)] = null;
                 board[x, y] = selectedObject;
+                movingObject = selectedObject.transform;
+                movingTarget = new Vector3(x, y, 0);
                 print("Valid move");
             }
             else
@@ -138,15 +172,10 @@ public class GameManager : MonoBehaviour
         selectedObject = board[x, y];
         if (selectedObject != null)
         {
-            if (selectedObject.CompareTag("Black"))
-            {
-                print("Clicked black");
-            }
-            else if (selectedObject.CompareTag("White"))
-            {
-                print("Clicked white");
-            }
+            print("Clicked " + selectedObject.tag);
             selectedObject.GetComponent<SpriteRenderer>().color = Color.gray;
+            CalculateValidMoves();
+            ShowValidMoves();
         }          
         else
         {
@@ -154,44 +183,197 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    bool IsValidMove(int targetRow, int targetCol)
+    void CalculateValidMoves()
+    {
+        validMoves.Clear();
+
+        if (selectedObject == null)
+            return;
+
+        int currentRow = Mathf.RoundToInt(selectedObject.transform.position.y);
+        int currentCol = Mathf.RoundToInt(selectedObject.transform.position.x);
+
+        //check for regular diagonal moves
+        CheckValidMove(Mathf.Clamp(currentRow + 1, 0, boardSize-1), Mathf.Clamp(currentCol + 1, 0, boardSize-1));
+        CheckValidMove(Mathf.Clamp(currentRow + 1, 0, boardSize-1), Mathf.Clamp(currentCol - 1, 0, boardSize-1));
+        CheckValidMove(Mathf.Clamp(currentRow - 1, 0, boardSize-1), Mathf.Clamp(currentCol + 1, 0, boardSize-1));
+        CheckValidMove(Mathf.Clamp(currentRow - 1, 0, boardSize-1), Mathf.Clamp(currentCol - 1, 0, boardSize-1));
+
+        //check for capturing moves...
+        CheckValidMove(Mathf.Clamp(currentRow + 2, 0, boardSize - 1), Mathf.Clamp(currentCol + 2, 0, boardSize - 1));
+        CheckValidMove(Mathf.Clamp(currentRow + 2, 0, boardSize - 1), Mathf.Clamp(currentCol - 2, 0, boardSize - 1));
+        CheckValidMove(Mathf.Clamp(currentRow - 2, 0, boardSize - 1), Mathf.Clamp(currentCol + 2, 0, boardSize - 1));
+        CheckValidMove(Mathf.Clamp(currentRow - 2, 0, boardSize - 1), Mathf.Clamp(currentCol - 2, 0, boardSize - 1));
+    }
+
+    void ShowValidMoves()
+    {
+        foreach (Vector2Int move in validMoves)
+        {
+            int row = move.x;
+            int col = move.y;
+            print("Valid: " + row + ", " + col);
+            GameObject newHighlight = Instantiate(highlightPrefab, new Vector3(col, row, 0), Quaternion.identity);
+            highlights.Add(newHighlight);
+        }
+    }
+
+    void CheckValidMove(int row, int col)
+    {
+        if (IsValidMove(row, col) > 0)
+        {
+            validMoves.Add(new Vector2Int(row, col));
+        }
+    }
+
+    int IsValidMove(int targetRow, int targetCol)
     {
         if (board[targetCol, targetRow] != null)
-            return false;
+            return 0;
 
-        //return Mathf.Abs(targetRow - (int)selectedObject.transform.position.y) == 1 && Mathf.Abs(targetCol - (int)selectedObject.transform.position.x) == 1;
-
-        // Determine the allowed row distance based on the piece color
+        //allowed row distance based on the piece color
         int allowedRowDistance = selectedObject.CompareTag("White") ? 1 : -1;
 
-        int currentRow = (int)selectedObject.transform.position.y;
-        int currentCol = (int)selectedObject.transform.position.x;
+        int currentRow = Mathf.RoundToInt(selectedObject.transform.position.y);
+        int currentCol = Mathf.RoundToInt(selectedObject.transform.position.x);
 
-        // Check for regular diagonal move
-        if (targetRow - currentRow == allowedRowDistance && Mathf.Abs(targetCol - currentCol) == 1)
+        //check for regular diagonal move
+        if (selectedObject.CompareTag("White") || selectedObject.CompareTag("Black"))
+        {
+            if (targetRow - currentRow == allowedRowDistance && Mathf.Abs(targetCol - currentCol) == 1)
+            {
+                //check for checker promotion
+                if (targetRow == 0 || targetRow == boardSize - 1)
+                {
+                    return 3;
+                }
+
+                return 1;
+            }
+        }
+        else if (selectedObject.CompareTag("WhiteKing") || selectedObject.CompareTag("BlackKing"))
+        {
+            if (Mathf.Abs(targetRow - currentRow) == 1 && Mathf.Abs(targetCol - currentCol) == 1)
+            {
+                //check for checker promotion
+                if (targetRow == 0 || targetRow == boardSize - 1)
+                {
+                    return 3;
+                }
+
+                return 1;
+            }
+        }
+
+        //check for capturing move (jump over opponent's piece)
+        if (selectedObject.CompareTag("White") || selectedObject.CompareTag("Black"))
+        {
+            if (targetRow - currentRow == (allowedRowDistance * 2) && Mathf.Abs(targetCol - currentCol) == 2)
+            {
+                int middleRow = (targetRow + currentRow) / 2;
+                int middleCol = (targetCol + currentCol) / 2;
+                GameObject middlePiece = board[middleCol, middleRow];
+
+                //check if there's an opponent's piece in the middle
+                if (middlePiece != null)
+                {
+                    if (IsOpponent(selectedObject, middlePiece))
+                    {
+                        //check for checker promotion
+                        if (targetRow == 0 || targetRow == boardSize - 1)
+                        {
+                            return 3;
+                        }
+
+                        return 2;
+                    }
+                }
+                
+            }
+        }
+        else if (selectedObject.CompareTag("WhiteKing") || selectedObject.CompareTag("BlackKing"))
+        {
+            if (Mathf.Abs(targetRow - currentRow) == 2 && Mathf.Abs(targetCol - currentCol) == 2)
+            {
+                int middleRow = (targetRow + currentRow) / 2;
+                int middleCol = (targetCol + currentCol) / 2;
+                GameObject middlePiece = board[middleCol, middleRow];
+
+                //check if there's an opponent's piece in the middle
+                if (middlePiece != null)
+                {
+                    if (IsOpponent(selectedObject, middlePiece))
+                    {
+                        //check for checker promotion
+                        if (targetRow == 0 || targetRow == boardSize - 1)
+                        {
+                            return 3;
+                        }
+
+                        return 2;
+                    }
+                }
+            }
+        }
+
+        return 0;
+    }
+
+    bool IsOpponent(GameObject selectedPiece, GameObject middlePiece)
+    {
+        if ((selectedPiece.CompareTag("White") && middlePiece.CompareTag("Black")) ||
+            (selectedPiece.CompareTag("White") && middlePiece.CompareTag("BlackKing")) ||
+            (selectedPiece.CompareTag("Black") && middlePiece.CompareTag("White")) ||
+            (selectedPiece.CompareTag("Black") && middlePiece.CompareTag("WhiteKing")) ||
+            (selectedPiece.CompareTag("WhiteKing") && middlePiece.CompareTag("Black")) ||
+            (selectedPiece.CompareTag("WhiteKing") && middlePiece.CompareTag("BlackKing")) ||
+            (selectedPiece.CompareTag("BlackKing") && middlePiece.CompareTag("White")) ||
+            (selectedPiece.CompareTag("BlackKing") && middlePiece.CompareTag("WhiteKing")))
         {
             return true;
         }
 
-        // Check for capturing move (jump over opponent's piece)
-        if (Mathf.Abs(targetRow - currentRow) == 2 && Mathf.Abs(targetCol - currentCol) == 2)
+        return false;
+    }
+
+    void CapturePiece(int targetRow, int targetCol)
+    {
+        int currentRow = Mathf.RoundToInt(selectedObject.transform.position.y);
+        int currentCol = Mathf.RoundToInt(selectedObject.transform.position.x);
+
+        int middleRow = (targetRow + currentRow) / 2;
+        int middleCol = (targetCol + currentCol) / 2;
+        GameObject middlePiece = board[middleCol, middleRow];
+
+        //check if there's an opponent's piece in the middle
+        if (middlePiece != null)
         {
-            int middleRow = (targetRow + currentRow) / 2;
-            int middleCol = (targetCol + currentCol) / 2;
-
-            GameObject middlePiece = board[middleCol, middleRow];
-
-            // Check if there's an opponent's piece in the middle
-            if (middlePiece != null && middlePiece.CompareTag("Black") && selectedObject.CompareTag("White") ||
-                middlePiece != null && middlePiece.CompareTag("White") && selectedObject.CompareTag("Black"))
+            if (IsOpponent(selectedObject, middlePiece))
             {
-                // Capture is valid
+                //capture is valid
                 Destroy(middlePiece);
                 board[middleCol, middleRow] = null;
-                return true;
             }
         }
+    }
 
-        return false;
+    void PromoteToKing(int row, int col)
+    {
+        GameObject newKing = null;
+        if (row == boardSize - 1 && selectedObject.CompareTag("White"))
+        {
+            //white piece to white king
+            newKing = CreatePiece(whiteKingPrefab, row, col);
+            print("White promoted to king");
+        }
+        else if (row == 0 && selectedObject.CompareTag("Black"))
+        {
+            //black piece to black king
+            newKing = CreatePiece(blackKingPrefab, row, col);
+            print("Black promoted to king");
+        }
+
+        Destroy(selectedObject);
+        selectedObject = newKing;
     }
 }

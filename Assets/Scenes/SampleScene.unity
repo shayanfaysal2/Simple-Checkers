@@ -169,7 +169,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   whitePiecePrefab: {fileID: 777402045525410088, guid: 89b7990fa38c5a946b886cd33e1a7382, type: 3}
   blackPiecePrefab: {fileID: 4920260531356209692, guid: 7f866c2946aa21f4cadcaf2e02ea003b, type: 3}
+  whiteKingPrefab: {fileID: 777402045525410088, guid: d508a43b9291f0f40952f2376242fe54, type: 3}
+  blackKingPrefab: {fileID: 4920260531356209692, guid: 06c2cc4b01c7fa54ca070718e0d75e54, type: 3}
+  highlightPrefab: {fileID: 7004457625305626811, guid: d622e2c70c8b9524fb54f941bcd78a10, type: 3}
   selectedObject: {fileID: 0}
+  movingObject: {fileID: 0}
 --- !u!1 &519420028
 GameObject:
   m_ObjectHideFlags: 0
@@ -273,7 +277,7 @@ GameObject:
   - component: {fileID: 971672251}
   - component: {fileID: 971672250}
   m_Layer: 0
-  m_Name: Grid
+  m_Name: Board
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
