@@ -1,28 +1,54 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
+using UnityEngine.SceneManagement;
 
 public class GameManager : MonoBehaviour
 {
+    public bool displayGrid;
+
     public GameObject whitePiecePrefab;
     public GameObject blackPiecePrefab;
-    public GameObject whiteKingPrefab;
-    public GameObject blackKingPrefab;
     public GameObject highlightPrefab;
+    public GameObject undoEndPanel;
+    public GameObject undoButton;
+    public Text turnText;
 
     private const int boardSize = 8;
     private GameObject[,] board = new GameObject[boardSize, boardSize];
 
-    public GameObject selectedObject;
-    public Transform movingObject;
+    private GameObject selectedObject;
+    private Transform movingObject;
     private Vector3 movingTarget;
 
     private List<Vector2Int> validMoves = new List<Vector2Int>();
     private List<GameObject> highlights = new List<GameObject>();
+    private Stack<MoveInfo> moveStack = new Stack<MoveInfo>();
+
+    bool moved = false;
+    bool turn = false;
+    public int whiteScore = 0;
+    public int blackScore = 0;
+
+    private class MoveInfo
+    {
+        public GameObject Piece;
+        public int StartRow;
+        public int StartCol;
+        public int EndRow;
+        public int EndCol;
+        public GameObject midPiece;
+        public bool piecePromoted;
+    }
+
 
     //debugging
     private void OnGUI()
     {
+        if (!displayGrid)
+            return;
+
         int cellSize = 50;
         int fontSize = 24;
         int startX = 50;
@@ -66,6 +92,9 @@ public class GameManager : MonoBehaviour
 
     private void Start()
     {
+        undoEndPanel.SetActive(false);
+        UpdateTurnText();
+
         InitializeBoard();
     }
 
@@ -121,6 +150,20 @@ public class GameManager : MonoBehaviour
         return piece;
     }
 
+    void UpdateTurnText()
+    {
+        if (!turn)
+        {
+            turnText.text = "Black's turn";
+            turnText.color = Color.black;
+        }
+        else
+        {
+            turnText.text = "White's turn";
+            turnText.color = Color.white;
+        }
+    }
+
     void Clicked(int x, int y)
     {
         //clearing any previous highlights
@@ -134,34 +177,68 @@ public class GameManager : MonoBehaviour
         if (x < 0 || x > 7 || y < 0 || y > 7)
         return;
 
+        //if already moved
+        if (moved)
+            return;
+
         print(y + ", " + x);
 
         //performing action on selected object
         if (selectedObject != null)
         {
+            GameObject middlePiece = null;
+            bool promoted = false;
             if (IsValidMove(y, x) > 0)
             {
                 //capturing
                 if (IsValidMove(y, x) == 2)
                 {
-                    CapturePiece(y, x);
+                    middlePiece = CapturePiece(y, x);
                 }
                 //promoting
                 if (IsValidMove(y, x) == 3)
                 {
                     PromoteToKing(y, x);
+                    promoted = true;
                 }
+                //capturing and promoting
+                if (IsValidMove(y, x) == 4)
+                {
+                    middlePiece = CapturePiece(y, x);
+                    PromoteToKing(y, x);
+                    promoted = true;
+                }
+
+                //store the move information in the stack
+                MoveInfo moveInfo = new MoveInfo
+                {
+                    Piece = selectedObject,
+                    StartRow = Mathf.RoundToInt(selectedObject.transform.position.y),
+                    StartCol = Mathf.RoundToInt(selectedObject.transform.position.x),
+                    EndRow = y,
+                    EndCol = x,
+                    midPiece = middlePiece,
+                    piecePromoted = promoted
+                };
+                moveStack.Push(moveInfo);
+
+                moved = true;
+                undoButton.SetActive(true);
+                undoEndPanel.SetActive(true);
+                CheckWin();
 
                 board[Mathf.RoundToInt(selectedObject.transform.position.x), Mathf.RoundToInt(selectedObject.transform.position.y)] = null;
                 board[x, y] = selectedObject;
                 movingObject = selectedObject.transform;
                 movingTarget = new Vector3(x, y, 0);
+                //turn = !turn;
                 print("Valid move");
             }
             else
             {
                 print("Invalid move");
             }
+            selectedObject.transform.localScale = Vector3.one;
             selectedObject.GetComponent<SpriteRenderer>().color = Color.white;
             selectedObject = null;
 
@@ -169,18 +246,103 @@ public class GameManager : MonoBehaviour
         }
 
         //selecting object
-        selectedObject = board[x, y];
+        if (board[x, y] == null)
+            return;
+
+        //turn
+        if (!turn)
+        {
+            if (board[x, y].CompareTag("Black") || board[x, y].CompareTag("BlackKing"))
+            {
+                selectedObject = board[x, y];
+            }
+            else
+            {
+                selectedObject = null;
+                print("Black's turn!");
+            }
+        }
+        else
+        {
+            if (board[x, y].CompareTag("White") || board[x, y].CompareTag("WhiteKing"))
+            {
+                selectedObject = board[x, y]; 
+            }
+            else
+            {
+                selectedObject = null;
+                print("White's turn!");
+            }
+        }
+
         if (selectedObject != null)
         {
             print("Clicked " + selectedObject.tag);
+            selectedObject.transform.localScale = new Vector3(1.1f, 1.1f, 1f);
             selectedObject.GetComponent<SpriteRenderer>().color = Color.gray;
             CalculateValidMoves();
             ShowValidMoves();
         }          
-        else
+    }
+
+    public void Undo()
+    {
+        if (moveStack.Count > 0)
         {
-            print("Clicked empty");
+            MoveInfo moveInfo = moveStack.Pop();
+            print("Undo: " + moveInfo.StartRow + ", " + moveInfo.StartCol);
+            selectedObject = moveInfo.Piece;
+            board[Mathf.RoundToInt(selectedObject.transform.position.x), Mathf.RoundToInt(selectedObject.transform.position.y)] = null;
+            board[moveInfo.StartCol, moveInfo.StartRow] = selectedObject;
+            movingObject = selectedObject.transform;
+            movingTarget = new Vector3(moveInfo.StartCol, moveInfo.StartRow, 0);
+            undoButton.SetActive(false);
+            undoEndPanel.SetActive(false);
+            moved = false;
+            //turn = !turn;
+
+            //if capture
+            if (moveInfo.midPiece != null)
+            {
+                moveInfo.midPiece.SetActive(true);
+                board[Mathf.RoundToInt(moveInfo.midPiece.transform.position.x), Mathf.RoundToInt(moveInfo.midPiece.transform.position.y)] = moveInfo.midPiece;
+
+                //undoing score
+                if (moveInfo.Piece.CompareTag("Black") || moveInfo.Piece.CompareTag("BlackKing"))
+                {
+                    blackScore--;
+                }
+                else if (moveInfo.Piece.CompareTag("White") || moveInfo.Piece.CompareTag("WhiteKing"))
+                {
+                    whiteScore--;
+                }
+            }
+
+            //if promotion
+            if (moveInfo.piecePromoted == true)
+            {
+                if (selectedObject.CompareTag("BlackKing"))
+                {
+                    selectedObject.tag = "Black";
+                    selectedObject.transform.GetChild(0).gameObject.SetActive(false);
+                }
+                else if (selectedObject.CompareTag("WhiteKing"))
+                {
+                    selectedObject.tag = "White";
+                    selectedObject.transform.GetChild(0).gameObject.SetActive(false);
+                }
+            }
+
+            selectedObject = null;
         }
+    }
+
+    public void EndTurn()
+    {
+        moved = false;
+        turn = !turn;
+        undoEndPanel.SetActive(false);
+        UpdateTurnText();
     }
 
     void CalculateValidMoves()
@@ -282,7 +444,7 @@ public class GameManager : MonoBehaviour
                         //check for checker promotion
                         if (targetRow == 0 || targetRow == boardSize - 1)
                         {
-                            return 3;
+                            return 4;
                         }
 
                         return 2;
@@ -305,10 +467,10 @@ public class GameManager : MonoBehaviour
                     if (IsOpponent(selectedObject, middlePiece))
                     {
                         //check for checker promotion
-                        if (targetRow == 0 || targetRow == boardSize - 1)
+                        /*if (targetRow == 0 || targetRow == boardSize - 1)
                         {
-                            return 3;
-                        }
+                            return 4;
+                        }*/
 
                         return 2;
                     }
@@ -336,7 +498,7 @@ public class GameManager : MonoBehaviour
         return false;
     }
 
-    void CapturePiece(int targetRow, int targetCol)
+    GameObject CapturePiece(int targetRow, int targetCol)
     {
         int currentRow = Mathf.RoundToInt(selectedObject.transform.position.y);
         int currentCol = Mathf.RoundToInt(selectedObject.transform.position.x);
@@ -351,10 +513,46 @@ public class GameManager : MonoBehaviour
             if (IsOpponent(selectedObject, middlePiece))
             {
                 //capture is valid
-                Destroy(middlePiece);
+                middlePiece.SetActive(false);
+                //Destroy(middlePiece);
                 board[middleCol, middleRow] = null;
+
+                //add score
+                if (selectedObject.CompareTag("Black") || selectedObject.CompareTag("BlackKing"))
+                {
+                    blackScore++;
+                }
+                else if (selectedObject.CompareTag("White") || selectedObject.CompareTag("WhiteKing"))
+                {
+                    whiteScore++;
+                }
+
+                return middlePiece;
             }
+
+            return null;
         }
+
+        return null;
+    }
+
+    void CheckWin()
+    {
+        if (blackScore >= 12)
+        {
+            print("Black won!");
+            RestartScene();
+        }
+        else if (whiteScore >= 12)
+        {
+            print("White won!");
+            RestartScene();
+        }
+    }
+
+    void RestartScene()
+    {
+        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
     }
 
     void PromoteToKing(int row, int col)
@@ -363,17 +561,23 @@ public class GameManager : MonoBehaviour
         if (row == boardSize - 1 && selectedObject.CompareTag("White"))
         {
             //white piece to white king
-            newKing = CreatePiece(whiteKingPrefab, row, col);
+            //newKing = CreatePiece(whiteKingPrefab, row, col);
+            selectedObject.tag = "WhiteKing";
+            selectedObject.transform.GetChild(0).gameObject.SetActive(true);
             print("White promoted to king");
         }
         else if (row == 0 && selectedObject.CompareTag("Black"))
         {
             //black piece to black king
-            newKing = CreatePiece(blackKingPrefab, row, col);
+            //newKing = CreatePiece(blackKingPrefab, row, col);
+            selectedObject.tag = "BlackKing";
+            selectedObject.transform.GetChild(0).gameObject.SetActive(true);
             print("Black promoted to king");
         }
 
-        Destroy(selectedObject);
-        selectedObject = newKing;
+        //Destroy(selectedObject);
+        //selectedObject.SetActive(false);
+        //board[Mathf.RoundToInt(selectedObject.transform.position.x), Mathf.RoundToInt(selectedObject.transform.position.y)] = null;
+        //selectedObject = newKing;
     }
 }
