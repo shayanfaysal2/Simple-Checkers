@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
+using System.Linq;
 
 public class GameManager : MonoBehaviour
 {
@@ -27,7 +28,7 @@ public class GameManager : MonoBehaviour
     private Transform movingObject;
     private Vector3 movingTarget;
 
-    private List<Vector2Int> validMoves = new List<Vector2Int>();
+    private List<ValidMove> validMoves = new List<ValidMove>();
     private List<GameObject> highlights = new List<GameObject>();
     private Stack<MoveInfo> moveStack = new Stack<MoveInfo>();
 
@@ -48,6 +49,12 @@ public class GameManager : MonoBehaviour
         public bool piecePromoted;
     }
 
+    private class ValidMove
+    {
+        public GameObject Piece;
+        public int row;
+        public int col;
+    }
 
     //debugging
     private void OnGUI()
@@ -201,21 +208,21 @@ public class GameManager : MonoBehaviour
         {
             GameObject middlePiece = null;
             bool promoted = false;
-            if (IsValidMove(y, x) > 0)
+            if (IsValidMove(selectedObject, y, x) > 0 && validMoves.Any(move => move.row == y && move.col == x))
             {
                 //capturing
-                if (IsValidMove(y, x) == 2)
+                if (IsValidMove(selectedObject, y, x) == 2)
                 {
                     middlePiece = CapturePiece(y, x);
                 }
                 //promoting
-                if (IsValidMove(y, x) == 3)
+                if (IsValidMove(selectedObject, y, x) == 3)
                 {
                     PromoteToKing(y, x);
                     promoted = true;
                 }
                 //capturing and promoting
-                if (IsValidMove(y, x) == 4)
+                if (IsValidMove(selectedObject, y, x) == 4)
                 {
                     middlePiece = CapturePiece(y, x);
                     PromoteToKing(y, x);
@@ -244,7 +251,6 @@ public class GameManager : MonoBehaviour
                 board[x, y] = selectedObject;
                 movingObject = selectedObject.transform;
                 movingTarget = new Vector3(x, y, 0);
-                //turn = !turn;
                 print("Valid move");
             }
             else
@@ -319,7 +325,6 @@ public class GameManager : MonoBehaviour
             undoButton.SetActive(false);
             undoEndPanel.SetActive(false);
             moved = false;
-            //turn = !turn;
 
             //if capture
             if (moveInfo.midPiece != null)
@@ -370,60 +375,135 @@ public class GameManager : MonoBehaviour
     {
         validMoves.Clear();
 
-        if (selectedObject == null)
-            return;
+        GameObject[] allPieces;
+        //finding pieces of side
+        if (!turn)
+        {
+            GameObject[] blackPieces = GameObject.FindGameObjectsWithTag("Black");
+            GameObject[] blackKings = GameObject.FindGameObjectsWithTag("BlackKing");
+            allPieces = blackPieces.Concat(blackKings).ToArray();
+        }
+        else
+        {
+            GameObject[] whitePieces = GameObject.FindGameObjectsWithTag("White");
+            GameObject[] whiteKings = GameObject.FindGameObjectsWithTag("WhiteKing");
+            allPieces = whitePieces.Concat(whiteKings).ToArray();
+        }
 
         //TODO: just use a grid index or keep the position of the piece stored in a variable rather then using transform 
-        int currentRow = Mathf.RoundToInt(selectedObject.transform.position.y);
-        int currentCol = Mathf.RoundToInt(selectedObject.transform.position.x);
 
-        //check for regular diagonal moves
-        CheckValidMove(Mathf.Clamp(currentRow + 1, 0, boardSize-1), Mathf.Clamp(currentCol + 1, 0, boardSize-1));
-        CheckValidMove(Mathf.Clamp(currentRow + 1, 0, boardSize-1), Mathf.Clamp(currentCol - 1, 0, boardSize-1));
-        CheckValidMove(Mathf.Clamp(currentRow - 1, 0, boardSize-1), Mathf.Clamp(currentCol + 1, 0, boardSize-1));
-        CheckValidMove(Mathf.Clamp(currentRow - 1, 0, boardSize-1), Mathf.Clamp(currentCol - 1, 0, boardSize-1));
+        for (int i = 0; i < allPieces.Length; i++)
+        {
+            GameObject currentPiece = allPieces[i];
 
-        //check for capturing moves...
-        CheckValidMove(Mathf.Clamp(currentRow + 2, 0, boardSize - 1), Mathf.Clamp(currentCol + 2, 0, boardSize - 1));
-        CheckValidMove(Mathf.Clamp(currentRow + 2, 0, boardSize - 1), Mathf.Clamp(currentCol - 2, 0, boardSize - 1));
-        CheckValidMove(Mathf.Clamp(currentRow - 2, 0, boardSize - 1), Mathf.Clamp(currentCol + 2, 0, boardSize - 1));
-        CheckValidMove(Mathf.Clamp(currentRow - 2, 0, boardSize - 1), Mathf.Clamp(currentCol - 2, 0, boardSize - 1));
+            int currentRow = Mathf.RoundToInt(currentPiece.transform.position.y);
+            int currentCol = Mathf.RoundToInt(currentPiece.transform.position.x);
+
+            CheckCaptureMove(currentPiece, Mathf.Clamp(currentRow + 2, 0, boardSize - 1), Mathf.Clamp(currentCol + 2, 0, boardSize - 1));
+            CheckCaptureMove(currentPiece, Mathf.Clamp(currentRow + 2, 0, boardSize - 1), Mathf.Clamp(currentCol - 2, 0, boardSize - 1));
+            CheckCaptureMove(currentPiece, Mathf.Clamp(currentRow - 2, 0, boardSize - 1), Mathf.Clamp(currentCol + 2, 0, boardSize - 1));
+            CheckCaptureMove(currentPiece, Mathf.Clamp(currentRow - 2, 0, boardSize - 1), Mathf.Clamp(currentCol - 2, 0, boardSize - 1));
+        }
+        //if no jump moves
+        if (validMoves.Count <= 0)
+        {
+            int currentRow = Mathf.RoundToInt(selectedObject.transform.position.y);
+            int currentCol = Mathf.RoundToInt(selectedObject.transform.position.x);
+
+            //check for regular diagonal moves
+            CheckValidMove(selectedObject, Mathf.Clamp(currentRow + 1, 0, boardSize - 1), Mathf.Clamp(currentCol + 1, 0, boardSize - 1));
+            CheckValidMove(selectedObject, Mathf.Clamp(currentRow + 1, 0, boardSize - 1), Mathf.Clamp(currentCol - 1, 0, boardSize - 1));
+            CheckValidMove(selectedObject, Mathf.Clamp(currentRow - 1, 0, boardSize - 1), Mathf.Clamp(currentCol + 1, 0, boardSize - 1));
+            CheckValidMove(selectedObject, Mathf.Clamp(currentRow - 1, 0, boardSize - 1), Mathf.Clamp(currentCol - 1, 0, boardSize - 1));
+        }
+        else
+        {
+            print("Jump moves exist");
+        }
+
+            /*if (selectedObject == null)
+                return;
+
+            int currentRow = Mathf.RoundToInt(selectedObject.transform.position.y);
+            int currentCol = Mathf.RoundToInt(selectedObject.transform.position.x);
+
+            //check for capturing moves
+            CheckValidMove(Mathf.Clamp(currentRow + 2, 0, boardSize - 1), Mathf.Clamp(currentCol + 2, 0, boardSize - 1));
+            CheckValidMove(Mathf.Clamp(currentRow + 2, 0, boardSize - 1), Mathf.Clamp(currentCol - 2, 0, boardSize - 1));
+            CheckValidMove(Mathf.Clamp(currentRow - 2, 0, boardSize - 1), Mathf.Clamp(currentCol + 2, 0, boardSize - 1));
+            CheckValidMove(Mathf.Clamp(currentRow - 2, 0, boardSize - 1), Mathf.Clamp(currentCol - 2, 0, boardSize - 1));
+
+            //check for regular diagonal moves
+            CheckValidMove(Mathf.Clamp(currentRow + 1, 0, boardSize-1), Mathf.Clamp(currentCol + 1, 0, boardSize-1));
+            CheckValidMove(Mathf.Clamp(currentRow + 1, 0, boardSize-1), Mathf.Clamp(currentCol - 1, 0, boardSize-1));
+            CheckValidMove(Mathf.Clamp(currentRow - 1, 0, boardSize-1), Mathf.Clamp(currentCol + 1, 0, boardSize-1));
+            CheckValidMove(Mathf.Clamp(currentRow - 1, 0, boardSize-1), Mathf.Clamp(currentCol - 1, 0, boardSize-1));*/
     }
 
     void ShowValidMoves()
     {
-        foreach (Vector2Int move in validMoves)
+        foreach (ValidMove move in validMoves)
         {
-            int row = move.x;
-            int col = move.y;
-            print("Valid: " + row + ", " + col);
-            GameObject newHighlight = Instantiate(highlightPrefab, new Vector3(col, row, 0), Quaternion.identity);
-            highlights.Add(newHighlight);
+            int row = move.row;
+            int col = move.col;
+            //print("Valid: " + row + ", " + col);
+            if (move.Piece == selectedObject)
+            {
+                GameObject newHighlight = Instantiate(highlightPrefab, new Vector3(col, row, 0), Quaternion.identity);
+                highlights.Add(newHighlight);
+            }
+            
         }
     }
 
-    void CheckValidMove(int row, int col)
+    bool CheckValidMove(GameObject piece, int row, int col)
     {
-        if (IsValidMove(row, col) > 0)
+        if (IsValidMove(piece, row, col) > 0)
         {
-            validMoves.Add(new Vector2Int(row, col));
+            ValidMove move = new ValidMove();
+            move.Piece = piece;
+            move.row = row;
+            move.col = col;
+
+            validMoves.Add(move);
+            return true;
         }
+
+        return false;
+    }
+
+    bool CheckCaptureMove(GameObject piece, int row, int col)
+    {
+        int x = IsValidMove(piece, row, col);
+        if (x == 2 || x == 4)
+        {
+            print("Capture move found");
+            ValidMove move = new ValidMove();
+            move.Piece = piece;
+            move.row = row;
+            move.col = col;
+
+            validMoves.Add(move);
+            return true;
+        }
+
+        return false;
     }
 
     //TODO: can be made much more simple, just have to check the diagonals of the selected piece 
-    int IsValidMove(int targetRow, int targetCol)
+    int IsValidMove(GameObject piece, int targetRow, int targetCol)
     {
         if (board[targetCol, targetRow] != null)
             return 0;
 
         //allowed row distance based on the piece color
-        int allowedRowDistance = selectedObject.CompareTag("White") ? 1 : -1;
+        int allowedRowDistance = piece.CompareTag("White") ? 1 : -1;
 
-        int currentRow = Mathf.RoundToInt(selectedObject.transform.position.y);
-        int currentCol = Mathf.RoundToInt(selectedObject.transform.position.x);
+        int currentRow = Mathf.RoundToInt(piece.transform.position.y);
+        int currentCol = Mathf.RoundToInt(piece.transform.position.x);
 
         //check for regular diagonal move
-        if (selectedObject.CompareTag("White") || selectedObject.CompareTag("Black"))
+        if (piece.CompareTag("White") || piece.CompareTag("Black"))
         {
             if (targetRow - currentRow == allowedRowDistance && Mathf.Abs(targetCol - currentCol) == 1)
             {
@@ -436,7 +516,7 @@ public class GameManager : MonoBehaviour
                 return 1;
             }
         }
-        else if (selectedObject.CompareTag("WhiteKing") || selectedObject.CompareTag("BlackKing"))
+        else if (piece.CompareTag("WhiteKing") || piece.CompareTag("BlackKing"))
         {
             if (Mathf.Abs(targetRow - currentRow) == 1 && Mathf.Abs(targetCol - currentCol) == 1)
             {
@@ -451,7 +531,7 @@ public class GameManager : MonoBehaviour
         }
 
         //check for capturing move (jump over opponent's piece)
-        if (selectedObject.CompareTag("White") || selectedObject.CompareTag("Black"))
+        if (piece.CompareTag("White") || piece.CompareTag("Black"))
         {
             if (targetRow - currentRow == (allowedRowDistance * 2) && Mathf.Abs(targetCol - currentCol) == 2)
             {
@@ -462,7 +542,7 @@ public class GameManager : MonoBehaviour
                 //check if there's an opponent's piece in the middle
                 if (middlePiece != null)
                 {
-                    if (IsOpponent(selectedObject, middlePiece))
+                    if (IsOpponent(piece, middlePiece))
                     {
                         //check for checker promotion
                         if (targetRow == 0 || targetRow == boardSize - 1)
@@ -476,7 +556,7 @@ public class GameManager : MonoBehaviour
                 
             }
         }
-        else if (selectedObject.CompareTag("WhiteKing") || selectedObject.CompareTag("BlackKing"))
+        else if (piece.CompareTag("WhiteKing") || piece.CompareTag("BlackKing"))
         {
             if (Mathf.Abs(targetRow - currentRow) == 2 && Mathf.Abs(targetCol - currentCol) == 2)
             {
@@ -487,14 +567,8 @@ public class GameManager : MonoBehaviour
                 //check if there's an opponent's piece in the middle
                 if (middlePiece != null)
                 {
-                    if (IsOpponent(selectedObject, middlePiece))
+                    if (IsOpponent(piece, middlePiece))
                     {
-                        //check for checker promotion
-                        /*if (targetRow == 0 || targetRow == boardSize - 1)
-                        {
-                            return 4;
-                        }*/
-
                         return 2;
                     }
                 }
@@ -539,7 +613,6 @@ public class GameManager : MonoBehaviour
             {
                 //capture is valid
                 middlePiece.SetActive(false);
-                //Destroy(middlePiece);
                 board[middleCol, middleRow] = null;
 
                 //add score
@@ -583,11 +656,9 @@ public class GameManager : MonoBehaviour
     //TODO: logic is fine, remove tag comparisons 
     void PromoteToKing(int row, int col)
     {
-        GameObject newKing = null;
         if (row == boardSize - 1 && selectedObject.CompareTag("White"))
         {
             //white piece to white king
-            //newKing = CreatePiece(whiteKingPrefab, row, col);
             selectedObject.tag = "WhiteKing";
             selectedObject.transform.GetChild(0).gameObject.SetActive(true);
             print("White promoted to king");
@@ -595,15 +666,9 @@ public class GameManager : MonoBehaviour
         else if (row == 0 && selectedObject.CompareTag("Black"))
         {
             //black piece to black king
-            //newKing = CreatePiece(blackKingPrefab, row, col);
             selectedObject.tag = "BlackKing";
             selectedObject.transform.GetChild(0).gameObject.SetActive(true);
             print("Black promoted to king");
         }
-
-        //Destroy(selectedObject);
-        //selectedObject.SetActive(false);
-        //board[Mathf.RoundToInt(selectedObject.transform.position.x), Mathf.RoundToInt(selectedObject.transform.position.y)] = null;
-        //selectedObject = newKing;
     }
 }
