@@ -6,8 +6,13 @@ using UnityEngine.SceneManagement;
 
 public class GameManager : MonoBehaviour
 {
+    /// <summary>
+    /// Follow the coding standard defined here
+    /// https://stax3.slab.com/posts/engineering-practices-unity-4b8xeh31
+    /// </summary>
     public bool displayGrid;
 
+    //TODO: dont use tags and your base for comparisons 
     public GameObject whitePiecePrefab;
     public GameObject blackPiecePrefab;
     public GameObject highlightPrefab;
@@ -31,6 +36,7 @@ public class GameManager : MonoBehaviour
     public int whiteScore = 0;
     public int blackScore = 0;
 
+    //TODO: move classes like these into their own file, or a single shared file separate from your mono scripts
     private class MoveInfo
     {
         public GameObject Piece;
@@ -100,6 +106,7 @@ public class GameManager : MonoBehaviour
 
     private void Update()
     {
+        //TODO: move this into its own class
         if (Input.GetMouseButtonDown(0))
         {
             //getting mouse position
@@ -121,6 +128,7 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    //TODO: move into a grid/board class 
     void InitializeBoard()
     {
         //create alternating white and black pieces
@@ -143,6 +151,7 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    //TODO: remove redundant return 
     GameObject CreatePiece(GameObject prefab, int row, int col)
     {
         GameObject piece = Instantiate(prefab, new Vector3(col, row), Quaternion.identity);
@@ -164,9 +173,13 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    //TODO: rename function, this is now a super function that is doing too many things 
+    //TODO: break the functionality of this function into separate functions 
     void Clicked(int x, int y)
     {
         //clearing any previous highlights
+        //TODO: if your going to use a separate object for highlighting, use object pooling
+        //TODO: highlight can just be a function of the checker that enables or changes sprite 
         foreach (GameObject highlight in highlights)
         {
             Destroy(highlight);
@@ -174,8 +187,8 @@ public class GameManager : MonoBehaviour
         highlights.Clear();
 
         //if invalid position
-        if (x < 0 || x > 7 || y < 0 || y > 7)
-        return;
+        //TODO: user the board size variable you declared here
+        if (x < 0 || x > 7 || y < 0 || y > 7) return;
 
         //if already moved
         if (moved)
@@ -290,12 +303,19 @@ public class GameManager : MonoBehaviour
         if (moveStack.Count > 0)
         {
             MoveInfo moveInfo = moveStack.Pop();
+            
             print("Undo: " + moveInfo.StartRow + ", " + moveInfo.StartCol);
+            
             selectedObject = moveInfo.Piece;
+            
             board[Mathf.RoundToInt(selectedObject.transform.position.x), Mathf.RoundToInt(selectedObject.transform.position.y)] = null;
+            
+            //TODO: keep the x,y notation, x = rows, y = col
             board[moveInfo.StartCol, moveInfo.StartRow] = selectedObject;
+            
             movingObject = selectedObject.transform;
             movingTarget = new Vector3(moveInfo.StartCol, moveInfo.StartRow, 0);
+            
             undoButton.SetActive(false);
             undoEndPanel.SetActive(false);
             moved = false;
@@ -305,6 +325,7 @@ public class GameManager : MonoBehaviour
             if (moveInfo.midPiece != null)
             {
                 moveInfo.midPiece.SetActive(true);
+                
                 board[Mathf.RoundToInt(moveInfo.midPiece.transform.position.x), Mathf.RoundToInt(moveInfo.midPiece.transform.position.y)] = moveInfo.midPiece;
 
                 //undoing score
@@ -352,6 +373,7 @@ public class GameManager : MonoBehaviour
         if (selectedObject == null)
             return;
 
+        //TODO: just use a grid index or keep the position of the piece stored in a variable rather then using transform 
         int currentRow = Mathf.RoundToInt(selectedObject.transform.position.y);
         int currentCol = Mathf.RoundToInt(selectedObject.transform.position.x);
 
@@ -388,6 +410,7 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    //TODO: can be made much more simple, just have to check the diagonals of the selected piece 
     int IsValidMove(int targetRow, int targetCol)
     {
         if (board[targetCol, targetRow] != null)
@@ -481,6 +504,7 @@ public class GameManager : MonoBehaviour
         return 0;
     }
 
+    //TODO: Can be a simple id check
     bool IsOpponent(GameObject selectedPiece, GameObject middlePiece)
     {
         if ((selectedPiece.CompareTag("White") && middlePiece.CompareTag("Black")) ||
@@ -500,6 +524,7 @@ public class GameManager : MonoBehaviour
 
     GameObject CapturePiece(int targetRow, int targetCol)
     {
+        //TODO: logic that is being reused constantly should be its own function 
         int currentRow = Mathf.RoundToInt(selectedObject.transform.position.y);
         int currentCol = Mathf.RoundToInt(selectedObject.transform.position.x);
 
@@ -555,6 +580,7 @@ public class GameManager : MonoBehaviour
         SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
     }
 
+    //TODO: logic is fine, remove tag comparisons 
     void PromoteToKing(int row, int col)
     {
         GameObject newKing = null;
