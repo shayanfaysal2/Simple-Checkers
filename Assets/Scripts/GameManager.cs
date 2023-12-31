@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
-using System.Linq;
 
 public class GameManager : MonoBehaviour
 {
@@ -11,164 +10,37 @@ public class GameManager : MonoBehaviour
     /// Follow the coding standard defined here
     /// https://stax3.slab.com/posts/engineering-practices-unity-4b8xeh31
     /// </summary>
-    public bool displayGrid;
+    
+    public static GameManager instance;
 
-    //TODO: dont use tags and your base for comparisons 
-    public GameObject whitePiecePrefab;
-    public GameObject blackPiecePrefab;
-    public GameObject highlightPrefab;
-    public GameObject undoEndPanel;
-    public GameObject undoButton;
-    public Text turnText;
+    public Piece.PieceType turn = Piece.PieceType.black;
+    [HideInInspector] public bool moved = false;
 
-    private const int boardSize = 8;
-    private GameObject[,] board = new GameObject[boardSize, boardSize];
+    [SerializeField] private GameObject moveEndPanel;
+    [SerializeField] private Text turnText;
+    [SerializeField] private Text blackScoreText;
+    [SerializeField] private Text whiteScoreText;
+    [SerializeField] private Board board;
 
-    private GameObject selectedObject;
-    private Transform movingObject;
-    private Vector3 movingTarget;
+    private int whiteScore = 0;
+    private  int blackScore = 0;
 
-    private List<ValidMove> validMoves = new List<ValidMove>();
-    private List<GameObject> highlights = new List<GameObject>();
-    private Stack<MoveInfo> moveStack = new Stack<MoveInfo>();
-
-    bool moved = false;
-    bool turn = false;
-    public int whiteScore = 0;
-    public int blackScore = 0;
-
-    //TODO: move classes like these into their own file, or a single shared file separate from your mono scripts
-    private class MoveInfo
+    private void Awake()
     {
-        public GameObject Piece;
-        public int StartRow;
-        public int StartCol;
-        public int EndRow;
-        public int EndCol;
-        public GameObject midPiece;
-        public bool piecePromoted;
-    }
-
-    private class ValidMove
-    {
-        public GameObject Piece;
-        public int row;
-        public int col;
-    }
-
-    //debugging
-    private void OnGUI()
-    {
-        if (!displayGrid)
-            return;
-
-        int cellSize = 50;
-        int fontSize = 24;
-        int startX = 50;
-        int startY = 400;
-
-        GUIStyle style = new GUIStyle(GUI.skin.label);
-        style.fontSize = fontSize;
-
-        for (int i = 0; i < boardSize; i++)
-        {
-            for (int j = 0; j < boardSize; j++)
-            {
-                int value = 0;
-                if (board[j, i] != null)
-                {
-                    if (board[j, i].CompareTag("Black"))
-                    {
-                        value = 1;
-                    }
-                    else if (board[j, i].CompareTag("White"))
-                    {
-                        value = -1;
-                    }
-                    else if (board[j, i].CompareTag("BlackKing"))
-                    {
-                        value = 2;
-                    }
-                    else if (board[j, i].CompareTag("WhiteKing"))
-                    {
-                        value = -2;
-                    }
-                }
-                
-                string text = value.ToString();
-                int xPos = startX + j * cellSize;
-                int yPos = startY - i * cellSize;
-                GUI.Label(new Rect(xPos, yPos, cellSize, cellSize), text, style);
-            }
-        }
+        //singleton
+        if (instance == null)
+            instance = this;
     }
 
     private void Start()
     {
-        undoEndPanel.SetActive(false);
-        UpdateTurnText();
-
-        InitializeBoard();
-    }
-
-    private void Update()
-    {
-        //TODO: move this into its own class
-        if (Input.GetMouseButtonDown(0))
-        {
-            //getting mouse position
-            Vector3 mousePos = Input.mousePosition;
-            mousePos.z = Camera.main.nearClipPlane;
-            Vector3 worldPosition = Camera.main.ScreenToWorldPoint(mousePos);
-
-            //getting grid position
-            int roundedX = Mathf.RoundToInt(worldPosition.x);
-            int roundedY = Mathf.RoundToInt(worldPosition.y);
-
-            Clicked(roundedX, roundedY);
-        }
-
-        //lerping piece
-        if (movingObject != null)
-        {
-            movingObject.transform.position = Vector3.Lerp(movingObject.transform.position, movingTarget, Time.deltaTime * 8);
-        }
-    }
-
-    //TODO: move into a grid/board class 
-    void InitializeBoard()
-    {
-        //create alternating white and black pieces
-        for (int row = 0; row < boardSize; row++)
-        {
-            for (int col = 0; col < boardSize; col++)
-            {
-                if ((row + col) % 2 == 0)
-                {
-                    if (row < 3)
-                    {
-                        CreatePiece(whitePiecePrefab, row, col);
-                    }
-                    else if (row > 4)
-                    {
-                        CreatePiece(blackPiecePrefab, row, col);
-                    }
-                }
-            }
-        }
-    }
-
-    //TODO: remove redundant return 
-    GameObject CreatePiece(GameObject prefab, int row, int col)
-    {
-        GameObject piece = Instantiate(prefab, new Vector3(col, row), Quaternion.identity);
-        board[col, row] = piece;
-        return piece;
+        moveEndPanel.SetActive(false);
+        UpdateTurnText();  
     }
 
     void UpdateTurnText()
     {
-        if (!turn)
+        if (turn == Piece.PieceType.black)
         {
             turnText.text = "Black's turn";
             turnText.color = Color.black;
@@ -180,458 +52,47 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    //TODO: rename function, this is now a super function that is doing too many things 
-    //TODO: break the functionality of this function into separate functions 
-    void Clicked(int x, int y)
+    public void PerformedMove()
     {
-        //clearing any previous highlights
-        //TODO: if your going to use a separate object for highlighting, use object pooling
-        //TODO: highlight can just be a function of the checker that enables or changes sprite 
-        foreach (GameObject highlight in highlights)
-        {
-            Destroy(highlight);
-        }
-        highlights.Clear();
-
-        //if invalid position
-        //TODO: user the board size variable you declared here
-        if (x < 0 || x > 7 || y < 0 || y > 7) return;
-
-        //if already moved
-        if (moved)
-            return;
-
-        print(y + ", " + x);
-
-        //performing action on selected object
-        if (selectedObject != null)
-        {
-            GameObject middlePiece = null;
-            bool promoted = false;
-            if (IsValidMove(selectedObject, y, x) > 0 && validMoves.Any(move => move.row == y && move.col == x))
-            {
-                //capturing
-                if (IsValidMove(selectedObject, y, x) == 2)
-                {
-                    middlePiece = CapturePiece(y, x);
-                }
-                //promoting
-                if (IsValidMove(selectedObject, y, x) == 3)
-                {
-                    PromoteToKing(y, x);
-                    promoted = true;
-                }
-                //capturing and promoting
-                if (IsValidMove(selectedObject, y, x) == 4)
-                {
-                    middlePiece = CapturePiece(y, x);
-                    PromoteToKing(y, x);
-                    promoted = true;
-                }
-
-                //store the move information in the stack
-                MoveInfo moveInfo = new MoveInfo
-                {
-                    Piece = selectedObject,
-                    StartRow = Mathf.RoundToInt(selectedObject.transform.position.y),
-                    StartCol = Mathf.RoundToInt(selectedObject.transform.position.x),
-                    EndRow = y,
-                    EndCol = x,
-                    midPiece = middlePiece,
-                    piecePromoted = promoted
-                };
-                moveStack.Push(moveInfo);
-
-                moved = true;
-                undoButton.SetActive(true);
-                undoEndPanel.SetActive(true);
-                CheckWin();
-
-                board[Mathf.RoundToInt(selectedObject.transform.position.x), Mathf.RoundToInt(selectedObject.transform.position.y)] = null;
-                board[x, y] = selectedObject;
-                movingObject = selectedObject.transform;
-                movingTarget = new Vector3(x, y, 0);
-                print("Valid move");
-            }
-            else
-            {
-                print("Invalid move");
-            }
-            selectedObject.transform.localScale = Vector3.one;
-            selectedObject.GetComponent<SpriteRenderer>().color = Color.white;
-            selectedObject = null;
-
-            return;
-        }
-
-        //selecting object
-        if (board[x, y] == null)
-            return;
-
-        //turn
-        if (!turn)
-        {
-            if (board[x, y].CompareTag("Black") || board[x, y].CompareTag("BlackKing"))
-            {
-                selectedObject = board[x, y];
-            }
-            else
-            {
-                selectedObject = null;
-                print("Black's turn!");
-            }
-        }
-        else
-        {
-            if (board[x, y].CompareTag("White") || board[x, y].CompareTag("WhiteKing"))
-            {
-                selectedObject = board[x, y]; 
-            }
-            else
-            {
-                selectedObject = null;
-                print("White's turn!");
-            }
-        }
-
-        if (selectedObject != null)
-        {
-            print("Clicked " + selectedObject.tag);
-            selectedObject.transform.localScale = new Vector3(1.1f, 1.1f, 1f);
-            selectedObject.GetComponent<SpriteRenderer>().color = Color.gray;
-            CalculateValidMoves();
-            ShowValidMoves();
-        }          
+        moved = true;
+        moveEndPanel.SetActive(true);
+        CheckWin();
     }
 
-    public void Undo()
+    public void PerformedUndo()
     {
-        if (moveStack.Count > 0)
-        {
-            MoveInfo moveInfo = moveStack.Pop();
-            
-            print("Undo: " + moveInfo.StartRow + ", " + moveInfo.StartCol);
-            
-            selectedObject = moveInfo.Piece;
-            
-            board[Mathf.RoundToInt(selectedObject.transform.position.x), Mathf.RoundToInt(selectedObject.transform.position.y)] = null;
-            
-            //TODO: keep the x,y notation, x = rows, y = col
-            board[moveInfo.StartCol, moveInfo.StartRow] = selectedObject;
-            
-            movingObject = selectedObject.transform;
-            movingTarget = new Vector3(moveInfo.StartCol, moveInfo.StartRow, 0);
-            
-            undoButton.SetActive(false);
-            undoEndPanel.SetActive(false);
-            moved = false;
+        moveEndPanel.SetActive(false);
+        moved = false;
+    }
 
-            //if capture
-            if (moveInfo.midPiece != null)
-            {
-                moveInfo.midPiece.SetActive(true);
-                
-                board[Mathf.RoundToInt(moveInfo.midPiece.transform.position.x), Mathf.RoundToInt(moveInfo.midPiece.transform.position.y)] = moveInfo.midPiece;
-
-                //undoing score
-                if (moveInfo.Piece.CompareTag("Black") || moveInfo.Piece.CompareTag("BlackKing"))
-                {
-                    blackScore--;
-                }
-                else if (moveInfo.Piece.CompareTag("White") || moveInfo.Piece.CompareTag("WhiteKing"))
-                {
-                    whiteScore--;
-                }
-            }
-
-            //if promotion
-            if (moveInfo.piecePromoted == true)
-            {
-                if (selectedObject.CompareTag("BlackKing"))
-                {
-                    selectedObject.tag = "Black";
-                    selectedObject.transform.GetChild(0).gameObject.SetActive(false);
-                }
-                else if (selectedObject.CompareTag("WhiteKing"))
-                {
-                    selectedObject.tag = "White";
-                    selectedObject.transform.GetChild(0).gameObject.SetActive(false);
-                }
-            }
-
-            selectedObject = null;
-        }
+    public void UndoMove()
+    {
+        board.Undo();
     }
 
     public void EndTurn()
     {
         moved = false;
-        turn = !turn;
-        undoEndPanel.SetActive(false);
+        if (turn == Piece.PieceType.black)
+            turn = Piece.PieceType.white;
+        else
+            turn = Piece.PieceType.black;
+        moveEndPanel.SetActive(false);
         UpdateTurnText();
     }
 
-    void CalculateValidMoves()
+    public void UpdateScore(Piece.PieceType piece, int s)
     {
-        validMoves.Clear();
-
-        GameObject[] allPieces;
-        //finding pieces of side
-        if (!turn)
+        if (piece == Piece.PieceType.black)
         {
-            GameObject[] blackPieces = GameObject.FindGameObjectsWithTag("Black");
-            GameObject[] blackKings = GameObject.FindGameObjectsWithTag("BlackKing");
-            allPieces = blackPieces.Concat(blackKings).ToArray();
+            blackScore += s;
+            blackScoreText.text = "Black Score: " + blackScore.ToString();
         }
         else
         {
-            GameObject[] whitePieces = GameObject.FindGameObjectsWithTag("White");
-            GameObject[] whiteKings = GameObject.FindGameObjectsWithTag("WhiteKing");
-            allPieces = whitePieces.Concat(whiteKings).ToArray();
+            whiteScore += s;
+            whiteScoreText.text = "White Score: " + whiteScore.ToString();
         }
-
-        //TODO: just use a grid index or keep the position of the piece stored in a variable rather then using transform 
-
-        for (int i = 0; i < allPieces.Length; i++)
-        {
-            GameObject currentPiece = allPieces[i];
-
-            int currentRow = Mathf.RoundToInt(currentPiece.transform.position.y);
-            int currentCol = Mathf.RoundToInt(currentPiece.transform.position.x);
-
-            CheckCaptureMove(currentPiece, Mathf.Clamp(currentRow + 2, 0, boardSize - 1), Mathf.Clamp(currentCol + 2, 0, boardSize - 1));
-            CheckCaptureMove(currentPiece, Mathf.Clamp(currentRow + 2, 0, boardSize - 1), Mathf.Clamp(currentCol - 2, 0, boardSize - 1));
-            CheckCaptureMove(currentPiece, Mathf.Clamp(currentRow - 2, 0, boardSize - 1), Mathf.Clamp(currentCol + 2, 0, boardSize - 1));
-            CheckCaptureMove(currentPiece, Mathf.Clamp(currentRow - 2, 0, boardSize - 1), Mathf.Clamp(currentCol - 2, 0, boardSize - 1));
-        }
-        //if no jump moves
-        if (validMoves.Count <= 0)
-        {
-            int currentRow = Mathf.RoundToInt(selectedObject.transform.position.y);
-            int currentCol = Mathf.RoundToInt(selectedObject.transform.position.x);
-
-            //check for regular diagonal moves
-            CheckValidMove(selectedObject, Mathf.Clamp(currentRow + 1, 0, boardSize - 1), Mathf.Clamp(currentCol + 1, 0, boardSize - 1));
-            CheckValidMove(selectedObject, Mathf.Clamp(currentRow + 1, 0, boardSize - 1), Mathf.Clamp(currentCol - 1, 0, boardSize - 1));
-            CheckValidMove(selectedObject, Mathf.Clamp(currentRow - 1, 0, boardSize - 1), Mathf.Clamp(currentCol + 1, 0, boardSize - 1));
-            CheckValidMove(selectedObject, Mathf.Clamp(currentRow - 1, 0, boardSize - 1), Mathf.Clamp(currentCol - 1, 0, boardSize - 1));
-        }
-        else
-        {
-            print("Jump moves exist");
-        }
-
-            /*if (selectedObject == null)
-                return;
-
-            int currentRow = Mathf.RoundToInt(selectedObject.transform.position.y);
-            int currentCol = Mathf.RoundToInt(selectedObject.transform.position.x);
-
-            //check for capturing moves
-            CheckValidMove(Mathf.Clamp(currentRow + 2, 0, boardSize - 1), Mathf.Clamp(currentCol + 2, 0, boardSize - 1));
-            CheckValidMove(Mathf.Clamp(currentRow + 2, 0, boardSize - 1), Mathf.Clamp(currentCol - 2, 0, boardSize - 1));
-            CheckValidMove(Mathf.Clamp(currentRow - 2, 0, boardSize - 1), Mathf.Clamp(currentCol + 2, 0, boardSize - 1));
-            CheckValidMove(Mathf.Clamp(currentRow - 2, 0, boardSize - 1), Mathf.Clamp(currentCol - 2, 0, boardSize - 1));
-
-            //check for regular diagonal moves
-            CheckValidMove(Mathf.Clamp(currentRow + 1, 0, boardSize-1), Mathf.Clamp(currentCol + 1, 0, boardSize-1));
-            CheckValidMove(Mathf.Clamp(currentRow + 1, 0, boardSize-1), Mathf.Clamp(currentCol - 1, 0, boardSize-1));
-            CheckValidMove(Mathf.Clamp(currentRow - 1, 0, boardSize-1), Mathf.Clamp(currentCol + 1, 0, boardSize-1));
-            CheckValidMove(Mathf.Clamp(currentRow - 1, 0, boardSize-1), Mathf.Clamp(currentCol - 1, 0, boardSize-1));*/
-    }
-
-    void ShowValidMoves()
-    {
-        foreach (ValidMove move in validMoves)
-        {
-            int row = move.row;
-            int col = move.col;
-            //print("Valid: " + row + ", " + col);
-            if (move.Piece == selectedObject)
-            {
-                GameObject newHighlight = Instantiate(highlightPrefab, new Vector3(col, row, 0), Quaternion.identity);
-                highlights.Add(newHighlight);
-            }
-            
-        }
-    }
-
-    bool CheckValidMove(GameObject piece, int row, int col)
-    {
-        if (IsValidMove(piece, row, col) > 0)
-        {
-            ValidMove move = new ValidMove();
-            move.Piece = piece;
-            move.row = row;
-            move.col = col;
-
-            validMoves.Add(move);
-            return true;
-        }
-
-        return false;
-    }
-
-    bool CheckCaptureMove(GameObject piece, int row, int col)
-    {
-        int x = IsValidMove(piece, row, col);
-        if (x == 2 || x == 4)
-        {
-            print("Capture move found");
-            ValidMove move = new ValidMove();
-            move.Piece = piece;
-            move.row = row;
-            move.col = col;
-
-            validMoves.Add(move);
-            return true;
-        }
-
-        return false;
-    }
-
-    //TODO: can be made much more simple, just have to check the diagonals of the selected piece 
-    int IsValidMove(GameObject piece, int targetRow, int targetCol)
-    {
-        if (board[targetCol, targetRow] != null)
-            return 0;
-
-        //allowed row distance based on the piece color
-        int allowedRowDistance = piece.CompareTag("White") ? 1 : -1;
-
-        int currentRow = Mathf.RoundToInt(piece.transform.position.y);
-        int currentCol = Mathf.RoundToInt(piece.transform.position.x);
-
-        //check for regular diagonal move
-        if (piece.CompareTag("White") || piece.CompareTag("Black"))
-        {
-            if (targetRow - currentRow == allowedRowDistance && Mathf.Abs(targetCol - currentCol) == 1)
-            {
-                //check for checker promotion
-                if (targetRow == 0 || targetRow == boardSize - 1)
-                {
-                    return 3;
-                }
-
-                return 1;
-            }
-        }
-        else if (piece.CompareTag("WhiteKing") || piece.CompareTag("BlackKing"))
-        {
-            if (Mathf.Abs(targetRow - currentRow) == 1 && Mathf.Abs(targetCol - currentCol) == 1)
-            {
-                //check for checker promotion
-                if (targetRow == 0 || targetRow == boardSize - 1)
-                {
-                    return 3;
-                }
-
-                return 1;
-            }
-        }
-
-        //check for capturing move (jump over opponent's piece)
-        if (piece.CompareTag("White") || piece.CompareTag("Black"))
-        {
-            if (targetRow - currentRow == (allowedRowDistance * 2) && Mathf.Abs(targetCol - currentCol) == 2)
-            {
-                int middleRow = (targetRow + currentRow) / 2;
-                int middleCol = (targetCol + currentCol) / 2;
-                GameObject middlePiece = board[middleCol, middleRow];
-
-                //check if there's an opponent's piece in the middle
-                if (middlePiece != null)
-                {
-                    if (IsOpponent(piece, middlePiece))
-                    {
-                        //check for checker promotion
-                        if (targetRow == 0 || targetRow == boardSize - 1)
-                        {
-                            return 4;
-                        }
-
-                        return 2;
-                    }
-                }
-                
-            }
-        }
-        else if (piece.CompareTag("WhiteKing") || piece.CompareTag("BlackKing"))
-        {
-            if (Mathf.Abs(targetRow - currentRow) == 2 && Mathf.Abs(targetCol - currentCol) == 2)
-            {
-                int middleRow = (targetRow + currentRow) / 2;
-                int middleCol = (targetCol + currentCol) / 2;
-                GameObject middlePiece = board[middleCol, middleRow];
-
-                //check if there's an opponent's piece in the middle
-                if (middlePiece != null)
-                {
-                    if (IsOpponent(piece, middlePiece))
-                    {
-                        return 2;
-                    }
-                }
-            }
-        }
-
-        return 0;
-    }
-
-    //TODO: Can be a simple id check
-    bool IsOpponent(GameObject selectedPiece, GameObject middlePiece)
-    {
-        if ((selectedPiece.CompareTag("White") && middlePiece.CompareTag("Black")) ||
-            (selectedPiece.CompareTag("White") && middlePiece.CompareTag("BlackKing")) ||
-            (selectedPiece.CompareTag("Black") && middlePiece.CompareTag("White")) ||
-            (selectedPiece.CompareTag("Black") && middlePiece.CompareTag("WhiteKing")) ||
-            (selectedPiece.CompareTag("WhiteKing") && middlePiece.CompareTag("Black")) ||
-            (selectedPiece.CompareTag("WhiteKing") && middlePiece.CompareTag("BlackKing")) ||
-            (selectedPiece.CompareTag("BlackKing") && middlePiece.CompareTag("White")) ||
-            (selectedPiece.CompareTag("BlackKing") && middlePiece.CompareTag("WhiteKing")))
-        {
-            return true;
-        }
-
-        return false;
-    }
-
-    GameObject CapturePiece(int targetRow, int targetCol)
-    {
-        //TODO: logic that is being reused constantly should be its own function 
-        int currentRow = Mathf.RoundToInt(selectedObject.transform.position.y);
-        int currentCol = Mathf.RoundToInt(selectedObject.transform.position.x);
-
-        int middleRow = (targetRow + currentRow) / 2;
-        int middleCol = (targetCol + currentCol) / 2;
-        GameObject middlePiece = board[middleCol, middleRow];
-
-        //check if there's an opponent's piece in the middle
-        if (middlePiece != null)
-        {
-            if (IsOpponent(selectedObject, middlePiece))
-            {
-                //capture is valid
-                middlePiece.SetActive(false);
-                board[middleCol, middleRow] = null;
-
-                //add score
-                if (selectedObject.CompareTag("Black") || selectedObject.CompareTag("BlackKing"))
-                {
-                    blackScore++;
-                }
-                else if (selectedObject.CompareTag("White") || selectedObject.CompareTag("WhiteKing"))
-                {
-                    whiteScore++;
-                }
-
-                return middlePiece;
-            }
-
-            return null;
-        }
-
-        return null;
     }
 
     void CheckWin()
@@ -639,36 +100,17 @@ public class GameManager : MonoBehaviour
         if (blackScore >= 12)
         {
             print("Black won!");
-            RestartScene();
+            Invoke("RestartScene", 2);
         }
         else if (whiteScore >= 12)
         {
             print("White won!");
-            RestartScene();
+            Invoke("RestartScene", 2);
         }
     }
 
     void RestartScene()
     {
         SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
-    }
-
-    //TODO: logic is fine, remove tag comparisons 
-    void PromoteToKing(int row, int col)
-    {
-        if (row == boardSize - 1 && selectedObject.CompareTag("White"))
-        {
-            //white piece to white king
-            selectedObject.tag = "WhiteKing";
-            selectedObject.transform.GetChild(0).gameObject.SetActive(true);
-            print("White promoted to king");
-        }
-        else if (row == 0 && selectedObject.CompareTag("Black"))
-        {
-            //black piece to black king
-            selectedObject.tag = "BlackKing";
-            selectedObject.transform.GetChild(0).gameObject.SetActive(true);
-            print("Black promoted to king");
-        }
     }
 }
