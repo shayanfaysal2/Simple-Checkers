@@ -19,22 +19,28 @@ public class Board : MonoBehaviour
     private List<MoveInfo> validMoves = new List<MoveInfo>();
     private Stack<MoveInfo> moveStack = new Stack<MoveInfo>();
 
-    private Piece selectedPiece;
+    public Piece selectedPiece;
     private Transform movingPiece;
     private Vector3 movingTarget;
 
-    void Start()
+    private Coroutine aiCoroutine = null;
+
+    private void Start()
     {
         InitializeBoard();
     }
 
-    void Update()
+    private void Update()
     {
         //left mouse click
         if (Input.GetMouseButtonDown(0))
         {
             //if already moved
             if (GameManager.instance.moved)
+                return;
+
+            //if ai turn
+            if (aiCoroutine != null)
                 return;
 
             //getting mouse to grid coordinates
@@ -55,6 +61,70 @@ public class Board : MonoBehaviour
         //lerping piece
         if (movingPiece != null)
             movingPiece.transform.position = Vector3.Lerp(movingPiece.transform.position, movingTarget, Time.deltaTime * 8);
+    }
+
+    public void AITurn()
+    {
+        aiCoroutine = StartCoroutine(AIDecision());
+    }
+
+    IEnumerator AIDecision()
+    {
+        yield return new WaitForSeconds(1);
+
+        int maxScore = -1;
+        List<MoveInfo> bestMoves = new List<MoveInfo>();
+        List<Piece> allPieces = new List<Piece>();
+        if (GameManager.instance.turn == Piece.PieceType.black)
+            allPieces = blackPieces;
+        else
+            allPieces = whitePieces;
+
+        //check all pieces
+        for (int i = 0; i < allPieces.Count; i++)
+        {
+            if (!allPieces[i].gameObject.activeSelf)
+                continue;
+
+            selectedPiece = allPieces[i];
+
+            CalculateValidMoves();
+
+            //check all valid moves
+            foreach (MoveInfo moveInfo in validMoves)
+            {
+                int currentScore = CalculateMoveScore(moveInfo);
+
+                //store best moves in list
+                if (currentScore > maxScore)
+                {
+                    maxScore = currentScore;
+                    bestMoves.Clear();
+                    bestMoves.Add(moveInfo);
+                }
+                else if (currentScore == maxScore)
+                {
+                    bestMoves.Add(moveInfo);
+                }
+            }
+        }
+
+        yield return new WaitForSeconds(Random.Range(0, 1));
+
+        if (bestMoves.Count > 0)
+        {
+            //choose a random best move from the list and perform it
+            MoveInfo bestMove = bestMoves[Random.Range(0, bestMoves.Count)];
+            selectedPiece = bestMove.piece;
+            PerformMove(bestMove.endX, bestMove.endY);
+        }
+        else
+            print("No best move");
+
+        yield return new WaitForSeconds(1);
+
+        GameManager.instance.EndTurn();
+        aiCoroutine = null;
     }
 
     void InitializeBoard()
@@ -116,7 +186,14 @@ public class Board : MonoBehaviour
 
         //check if performed move is valid
         int result = IsValidMove(selectedPiece, x, y);
-        if (result > 0 && validMoves.Any(move => move.endX == x && move.endY == y))
+
+        bool condition;
+        if (GameManager.instance.gameMode == GameManager.GameMode.playerVsAI || GameManager.instance.gameMode == GameManager.GameMode.AIvsAI)
+            condition = result > 0;
+        else
+            condition = result > 0 && validMoves.Any(move => move.endX == x && move.endY == y);
+
+        if (condition) //&& validMoves.Any(move => move.endX == x && move.endY == y))
         {
             //capturing
             if (result == 2)
@@ -146,10 +223,20 @@ public class Board : MonoBehaviour
             movingPiece = selectedPiece.transform;
             movingTarget = new Vector3(x, y, 0);
 
+            bool moreJumpsLeft = false;
             //continue if no more capture moves left
-            if (!((result == 2 || result == 4) && CalculateValidMoves()))
+            if (result == 2 || result == 4)
+            {
+                moreJumpsLeft = CalculateValidMoves();
+            }
+            if (!moreJumpsLeft)
             {
                 GameManager.instance.PerformedMove();
+            }
+            else
+            {
+                /*if ((GameManager.instance.gameMode == GameManager.GameMode.playerVsAI || GameManager.instance.gameMode == GameManager.GameMode.AIvsAI) && GameManager.instance.turn != GameManager.instance.playerTurn)
+                    AITurn();*/
             }
         }
 
@@ -246,6 +333,22 @@ public class Board : MonoBehaviour
         return false;
     }
 
+    int CalculateMoveScore(MoveInfo move)
+    {
+        //capture and promotion
+        if (move.midPiece != null && move.piecePromoted)
+            return 4;
+        //promotion
+        else if (move.midPiece == null && move.piecePromoted)
+            return 3;
+        //capture
+        else if (move.midPiece != null && !move.piecePromoted)
+            return 2;
+        //simple movement
+        else
+            return 1;
+    }
+
     void ShowValidMoves()
     {
         //highlight valid moves
@@ -284,7 +387,7 @@ public class Board : MonoBehaviour
 
             if (y - piece.y == allowedRowDistance && Mathf.Abs(x - piece.x) == 1)
             {
-                if (y == 0 || y == boardSize - 1) 
+                if (y == 0 || y == boardSize - 1)
                     return 3;   //promotion
                 else
                     return 1;   //diagonal move
@@ -293,7 +396,7 @@ public class Board : MonoBehaviour
             {
                 if (GetMiddlePiece(piece, x, y) != null)
                 {
-                    if (y == 0 || y == boardSize - 1) 
+                    if (y == 0 || y == boardSize - 1)
                         return 4;   //capture and promotion
                     else
                         return 2;   //capture

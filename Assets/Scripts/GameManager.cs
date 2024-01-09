@@ -11,19 +11,32 @@ public class GameManager : MonoBehaviour
     /// https://stax3.slab.com/posts/engineering-practices-unity-4b8xeh31
     /// </summary>
     
+    public enum GameMode
+    {
+        twoPlayer,
+        playerVsAI,
+        AIvsAI
+    }
+
     public static GameManager instance;
 
+    [HideInInspector] public GameMode gameMode;
     public Piece.PieceType turn = Piece.PieceType.black;
     [HideInInspector] public bool moved = false;
 
     [SerializeField] private GameObject moveEndPanel;
+    [SerializeField] private GameObject gameOverPanel;
+    [SerializeField] private Text winnerText;
     [SerializeField] private Text turnText;
     [SerializeField] private Text blackScoreText;
     [SerializeField] private Text whiteScoreText;
     [SerializeField] private Board board;
 
     private int whiteScore = 0;
-    private  int blackScore = 0;
+    private int blackScore = 0;
+    private bool gameOver = false;
+
+    [HideInInspector] public Piece.PieceType playerTurn;
 
     private void Awake()
     {
@@ -34,8 +47,20 @@ public class GameManager : MonoBehaviour
 
     private void Start()
     {
+        int mode = PlayerPrefs.GetInt("gameMode", 2);
+        if (mode == 0)
+            gameMode = GameMode.playerVsAI;
+        else if (mode == 1)
+            gameMode = GameMode.twoPlayer;
+        else
+            gameMode = GameMode.AIvsAI;
+
+        playerTurn = turn;
         moveEndPanel.SetActive(false);
-        UpdateTurnText();  
+        UpdateTurnText();
+
+        if (gameMode == GameMode.AIvsAI)
+            board.AITurn();
     }
 
     void UpdateTurnText()
@@ -55,7 +80,14 @@ public class GameManager : MonoBehaviour
     public void PerformedMove()
     {
         moved = true;
-        moveEndPanel.SetActive(true);
+        if (gameMode == GameMode.AIvsAI)
+        {
+            moveEndPanel.SetActive(false);
+        }
+        else if (!(gameMode == GameMode.playerVsAI && turn != playerTurn))
+        {
+            moveEndPanel.SetActive(true);
+        }
         CheckWin();
     }
 
@@ -74,11 +106,22 @@ public class GameManager : MonoBehaviour
     {
         moved = false;
         if (turn == Piece.PieceType.black)
+        {
             turn = Piece.PieceType.white;
+        }
         else
             turn = Piece.PieceType.black;
+
         moveEndPanel.SetActive(false);
         UpdateTurnText();
+
+        if (!gameOver)
+        {
+            if (gameMode == GameMode.playerVsAI && turn != playerTurn)
+                board.AITurn();
+            else if (gameMode == GameMode.AIvsAI)
+                board.AITurn();
+        }
     }
 
     public void UpdateScore(Piece.PieceType piece, int s)
@@ -99,18 +142,38 @@ public class GameManager : MonoBehaviour
     {
         if (blackScore >= 12)
         {
-            print("Black won!");
-            Invoke("RestartScene", 2);
+            Win(Piece.PieceType.black);
         }
         else if (whiteScore >= 12)
         {
-            print("White won!");
-            Invoke("RestartScene", 2);
+            Win(Piece.PieceType.white);
         }
+    }
+
+    void Win(Piece.PieceType pieceType)
+    {
+        gameOver = true;
+        turnText.gameObject.SetActive(false);
+        if (pieceType == Piece.PieceType.black)
+        {
+            winnerText.color = Color.black;
+            winnerText.text = "Black WON!";
+        }
+        else
+        {
+            winnerText.color = Color.white;
+            winnerText.text = "White WON!";
+        }
+        gameOverPanel.SetActive(true);
     }
 
     void RestartScene()
     {
         SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+    }
+
+    public void GoToMenu()
+    {
+        SceneManager.LoadScene(0);
     }
 }
