@@ -150,7 +150,7 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    void Win(Piece.PieceType pieceType)
+    public void Win(Piece.PieceType pieceType)
     {
         gameOver = true;
         turnText.gameObject.SetActive(false);

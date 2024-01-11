@@ -35,13 +35,17 @@ public class Board : MonoBehaviour
         //left mouse click
         if (Input.GetMouseButtonDown(0))
         {
-            //if already moved
-            if (GameManager.instance.moved)
+            //if ai vs ai
+            if (GameManager.instance.gameMode == GameManager.GameMode.AIvsAI)
                 return;
 
             //if ai turn
             if (aiCoroutine != null)
                 return;
+
+            //if already moved
+            if (GameManager.instance.moved)
+                return;      
 
             //getting mouse to grid coordinates
             int x = -1, y = -1;
@@ -119,11 +123,17 @@ public class Board : MonoBehaviour
             PerformMove(bestMove.endX, bestMove.endY);
         }
         else
-            print("No best move");
+        {
+            //checkmate
+            if (GameManager.instance.turn == Piece.PieceType.black)
+                GameManager.instance.Win(Piece.PieceType.white);
+            else
+                GameManager.instance.Win(Piece.PieceType.black);
+        }
 
         yield return new WaitForSeconds(1);
 
-        GameManager.instance.EndTurn();
+        //GameManager.instance.EndTurn();
         aiCoroutine = null;
     }
 
@@ -232,16 +242,29 @@ public class Board : MonoBehaviour
             if (!moreJumpsLeft)
             {
                 GameManager.instance.PerformedMove();
+
+                if (GameManager.instance.gameMode == GameManager.GameMode.playerVsAI && GameManager.instance.turn != GameManager.instance.playerTurn)
+                    StartCoroutine(EndAITurn());
+                else if (GameManager.instance.gameMode == GameManager.GameMode.AIvsAI)
+                    StartCoroutine(EndAITurn());
             }
             else
             {
-                /*if ((GameManager.instance.gameMode == GameManager.GameMode.playerVsAI || GameManager.instance.gameMode == GameManager.GameMode.AIvsAI) && GameManager.instance.turn != GameManager.instance.playerTurn)
-                    AITurn();*/
+                if (GameManager.instance.gameMode == GameManager.GameMode.playerVsAI && GameManager.instance.turn != GameManager.instance.playerTurn)
+                    AITurn();
+                else if (GameManager.instance.gameMode == GameManager.GameMode.AIvsAI)
+                    AITurn();
             }
         }
 
         selectedPiece.GetDeselected();
         selectedPiece = null;
+    }
+
+    IEnumerator EndAITurn()
+    {
+        yield return new WaitForSeconds(1);
+        GameManager.instance.EndTurn();
     }
 
     void PushMoveToStack(Piece piece, int x, int y, Piece middlePiece, bool promoted)
@@ -336,17 +359,71 @@ public class Board : MonoBehaviour
     int CalculateMoveScore(MoveInfo move)
     {
         //capture and promotion
-        if (move.midPiece != null && move.piecePromoted)
-            return 4;
+        if (!move.piece.isKing && move.midPiece != null && move.piecePromoted)
+            return 6;
         //promotion
-        else if (move.midPiece == null && move.piecePromoted)
-            return 3;
+        else if (!move.piece.isKing && move.midPiece == null && move.piecePromoted)
+            return 5;
         //capture
         else if (move.midPiece != null && !move.piecePromoted)
-            return 2;
+            return 4;
         //simple movement
         else
+        {
+            //if the piece is not a king, prioritize moving to the other side of the board
+            if (!move.piece.isKing)
+            {
+                //if black
+                if (move.piece.pieceType == Piece.PieceType.black)
+                {
+                    if (move.endY < move.startY)
+                    { 
+                        return 2;
+                    }
+
+                }
+                else
+                {
+                    if (move.endY > move.startY)
+                    {
+                        return 2;
+                    }
+                }
+            }
+            //if the piece is a king, prioritize moving towards the opponent
+            else
+            {   
+                //iterate through the pieces and sum up the positions
+                float sumX = 0;
+                float sumY = 0;
+
+                List<Piece> allPieces = new List<Piece>();
+                if (GameManager.instance.turn == Piece.PieceType.black)
+                    allPieces = whitePieces;
+                else
+                    allPieces = blackPieces;
+                foreach (Piece piece in allPieces)
+                {
+                    sumX += piece.x;
+                    sumY += piece.y;
+                }
+
+                // Calculate the average position
+                float averageX = sumX / allPieces.Count;
+                float averageY = sumY / allPieces.Count;
+
+                Vector2 pieceStartPos = new Vector2(move.startX, move.startY);
+                Vector2 pieceEndPos = new Vector2(move.endX, move.endY);
+                Vector2 avgPos = new Vector2(averageX, averageY);
+
+                //check if move brings piece closer to opponent
+                if (Vector2.Distance(pieceEndPos, avgPos) < Vector2.Distance(pieceStartPos, avgPos))
+                    return 3;
+            }
+
+            //default score for simple movement
             return 1;
+        }
     }
 
     void ShowValidMoves()
@@ -364,6 +441,8 @@ public class Board : MonoBehaviour
         {
             MoveInfo move = new MoveInfo();
             move.piece = piece;
+            move.startX = piece.x;
+            move.startY = piece.y;
             move.endX = x;
             move.endY = y;
             validMoves.Add(move);
