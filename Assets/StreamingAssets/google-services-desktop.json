@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "598164573322",
+    "project_id": "checkers-4b1b0",
+    "storage_bucket": "checkers-4b1b0.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:598164573322:android:f0ef06703247a50adbb173",
+        "android_client_info": {
+          "package_name": "com.shayanfaysal.checkers"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDI6qvEwqp_-1B-2ewELGydojSVWOuD4CQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

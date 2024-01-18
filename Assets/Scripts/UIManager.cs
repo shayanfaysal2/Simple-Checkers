@@ -9,6 +9,8 @@ namespace Zubash
 {
     public class UIManager : MonoBehaviour
     {
+        public static UIManager instance;
+
         public GameObject nameInputPanel;
         public InputField nameInputField;
         public TMP_InputField nameInputField2;
@@ -16,8 +18,24 @@ namespace Zubash
         public GameObject settingsPanel;
         public Button SettingsBtn;
 
+        public GameObject signUpPanel;
+        public GameObject signInPanel;
+
+        public InputField signUpEmailInputField;
+        public InputField signUpPasswordInputField;
+        public InputField signInEmailInputField;
+        public InputField signInPasswordInputField;
+
         //public AudioManager audioManager;
         public Slider volumeSlider;
+
+        private void Awake()
+        {
+            if (instance == null)
+                instance = this;
+            else
+                Destroy(gameObject);
+        }
 
         private void Start()
         {
@@ -65,6 +83,11 @@ namespace Zubash
             PlayerPrefs.SetString("UserName", userName);
             SetPlaceholder();
             welcomeText.text = "Welcome, " + userName + "!";
+
+            //sign in anonymously
+            FirebaseAuthManager.instance.SigninAnonymouslyAsync();
+            //settting firebase display name
+            FirebaseAuthManager.instance.UpdateUserProfileAsync(userName);
         }
 
         public void OpenSettingsPanel()
@@ -79,8 +102,17 @@ namespace Zubash
 
         public void UpdateUserName()
         {
+            string oldUserName = PlayerPrefs.GetString("UserName"); ;
             string newUserName = nameInputField2.text;
-            PlayerPrefs.SetString("UserName", newUserName);
+
+            if (oldUserName != newUserName)
+            {
+                PlayerPrefs.SetString("UserName", newUserName);
+
+                //updating firebase display name
+                FirebaseAuthManager.instance.UpdateUserProfileAsync(newUserName);
+            }
+            
             CloseSettingsPanel();
         }
 
@@ -106,6 +138,21 @@ namespace Zubash
         {
             PlayerPrefs.SetInt("gameMode", 2);
             SceneManager.LoadScene(1);
+        }
+
+        public void ShowSignIn()
+        {
+            signInPanel.SetActive(true);
+        }
+
+        public void SignUp()
+        {
+            FirebaseAuthManager.instance.SignUpUser(signUpEmailInputField.text, signUpPasswordInputField.text);
+        }
+
+        public void SignIn()
+        {
+            FirebaseAuthManager.instance.SignInUser(signInEmailInputField.text, signInPasswordInputField.text);
         }
     }
 }
