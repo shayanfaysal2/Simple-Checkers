@@ -59,6 +59,8 @@ public class GameManager : MonoBehaviour
         moveEndPanel.SetActive(false);
         UpdateTurnText();
 
+        XPManager.instance.ResetPoints();
+
         if (gameMode == GameMode.AIvsAI)
             board.AITurn();
     }
@@ -104,6 +106,10 @@ public class GameManager : MonoBehaviour
 
     public void EndTurn()
     {
+        //points
+        if (turn == playerTurn)
+            XPManager.instance.NormalMove();
+
         moved = false;
         if (turn == Piece.PieceType.black)
         {
@@ -165,6 +171,21 @@ public class GameManager : MonoBehaviour
             winnerText.text = "White WON!";
         }
         gameOverPanel.SetActive(true);
+
+        //updating in firebase
+        if (gameMode != GameMode.AIvsAI)
+        {
+            if (pieceType == playerTurn)
+            {
+                FirebaseDBManager.instance.IncreasePlayerWins();
+                XPManager.instance.CalculateXP(true);
+            }
+            else
+            {
+                FirebaseDBManager.instance.IncreasePlayerLosses();
+                XPManager.instance.CalculateXP(false);
+            }
+        }
     }
 
     void RestartScene()

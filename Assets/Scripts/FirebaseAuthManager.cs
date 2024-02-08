@@ -4,28 +4,26 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
+using UnityEngine.Networking;
 
 public class FirebaseAuthManager : MonoBehaviour
 {
     public static FirebaseAuthManager instance;
 
-    [SerializeField] private string logText = "";
     [SerializeField] private string email = "";
     [SerializeField] private string password = "";
     [SerializeField] private string displayName = "";
+    [SerializeField] private Uri photo_url;
 
     protected Firebase.Auth.FirebaseAuth auth;
     protected Firebase.Auth.FirebaseAuth otherAuth;
     protected Dictionary<string, Firebase.Auth.FirebaseUser> userByAuth = new Dictionary<string, Firebase.Auth.FirebaseUser>();
 
-    // Whether to sign in / link or reauthentication *and* fetch user profile data.
-    protected bool signInAndFetchProfile = false;
+    protected bool signInAndFetchProfile;
+
     // Flag set when a token is being fetched.  This is used to avoid printing the token
     // in IdTokenChanged() when the user presses the get token button.
     private bool fetchingToken = false;
-
-    private Vector2 scrollViewVector = Vector2.zero;
-    const int kMaxLogSize = 16382;
 
     // Options used to setup secondary authentication object.
     private Firebase.AppOptions otherAuthOptions = new Firebase.AppOptions
@@ -36,6 +34,15 @@ public class FirebaseAuthManager : MonoBehaviour
     };
 
     Firebase.DependencyStatus dependencyStatus = Firebase.DependencyStatus.UnavailableOther;
+
+    public static string DisplayName
+    {
+        get => instance.displayName;
+        set
+        {
+            instance.displayName = value;
+        }
+    }
 
     private void Awake()
     {
@@ -96,6 +103,53 @@ public class FirebaseAuthManager : MonoBehaviour
             }
         }
         AuthStateChanged(this, null);
+
+        //sign in anonymously
+        LoadingManager.instance.ShowLoadingScreen(true);
+        SigninAnonymouslyAsync();
+    }
+
+    // Track state changes of the auth object.
+    void AuthStateChanged(object sender, System.EventArgs eventArgs)
+    {
+        Firebase.Auth.FirebaseAuth senderAuth = sender as Firebase.Auth.FirebaseAuth;
+        Firebase.Auth.FirebaseUser user = null;
+        if (senderAuth != null) userByAuth.TryGetValue(senderAuth.App.Name, out user);
+        if (senderAuth == auth && senderAuth.CurrentUser != user)
+        {
+            bool signedIn = user != senderAuth.CurrentUser && senderAuth.CurrentUser != null;
+            if (!signedIn && user != null)
+            {
+                DebugLog("Signed out " + user.UserId);
+            }
+            user = senderAuth.CurrentUser;
+            userByAuth[senderAuth.App.Name] = user;
+
+            //when signed in
+            if (signedIn)
+            {
+                DebugLog("AuthStateChanged Signed in " + user.UserId);
+                displayName = user.DisplayName ?? "";
+                photo_url = user.PhotoUrl;
+                DisplayDetailedUserInfo(user, 1);
+
+                EventManager.LoginSuccessful();
+                //Zubash.UIManager.instance.UpdateWelcomeText();
+
+                if (photo_url != null)
+                    StartCoroutine(ProfilePhoto());
+            }
+        }
+    }
+
+    IEnumerator ProfilePhoto()
+    {
+        using (UnityWebRequest uwr = UnityWebRequestTexture.GetTexture(photo_url))
+        {
+            yield return uwr.SendWebRequest();
+
+            //Zubash.UIManager.instance.UpdateUserPhoto(DownloadHandlerTexture.GetContent(uwr));
+        }
     }
 
     public void SignUpUser(string email, string password)
@@ -252,30 +306,6 @@ public class FirebaseAuthManager : MonoBehaviour
         }
     }
 
-    // Track state changes of the auth object.
-    void AuthStateChanged(object sender, System.EventArgs eventArgs)
-    {
-        Firebase.Auth.FirebaseAuth senderAuth = sender as Firebase.Auth.FirebaseAuth;
-        Firebase.Auth.FirebaseUser user = null;
-        if (senderAuth != null) userByAuth.TryGetValue(senderAuth.App.Name, out user);
-        if (senderAuth == auth && senderAuth.CurrentUser != user)
-        {
-            bool signedIn = user != senderAuth.CurrentUser && senderAuth.CurrentUser != null;
-            if (!signedIn && user != null)
-            {
-                DebugLog("Signed out " + user.UserId);
-            }
-            user = senderAuth.CurrentUser;
-            userByAuth[senderAuth.App.Name] = user;
-            if (signedIn)
-            {
-                DebugLog("AuthStateChanged Signed in " + user.UserId);
-                displayName = user.DisplayName ?? "";
-                DisplayDetailedUserInfo(user, 1);
-            }
-        }
-    }
-
     // Track ID token changes.
     void IdTokenChanged(object sender, System.EventArgs eventArgs)
     {
@@ -362,6 +392,8 @@ public class FirebaseAuthManager : MonoBehaviour
             if (LogTaskCompletion(task, "User profile"))
             {
                 DisplayDetailedUserInfo(auth.CurrentUser, 1);
+
+                EventManager.DisplayNameSet();
             }
         });
     }
@@ -387,6 +419,9 @@ public class FirebaseAuthManager : MonoBehaviour
     // Attempt to sign in anonymously.
     public Task SigninAnonymouslyAsync()
     {
+        //show loading screen
+        LoadingManager.instance.ShowLoadingScreen(true);
+
         DebugLog("Attempting to sign anonymously...");
         //DisableUI();
         return auth.SignInAnonymouslyAsync().ContinueWithOnMainThread(HandleSignInWithAuthResult);
@@ -412,6 +447,7 @@ public class FirebaseAuthManager : MonoBehaviour
             {
                 DisplayAuthResult(task.Result, 1);
                 DebugLog(String.Format("{0} signed in", task.Result.User.DisplayName));
+                displayName = task.Result.User.DisplayName;
             }
             else
             {
@@ -548,14 +584,14 @@ public class FirebaseAuthManager : MonoBehaviour
     public void DebugLog(string s)
     {
         Debug.Log(s);
-        logText += s + "\n";
+        /*logText += s + "\n";
 
         while (logText.Length > kMaxLogSize)
         {
             int index = logText.IndexOf("\n");
             logText = logText.Substring(index + 1);
         }
-        scrollViewVector.y = int.MaxValue;
+        scrollViewVector.y = int.MaxValue;*/
     }
 
     void OnDestroy()

@@ -205,8 +205,12 @@ public class Board : MonoBehaviour
 
         if (condition) //&& validMoves.Any(move => move.endX == x && move.endY == y))
         {
+            //normal move
+            if (result == 1)
+            {
+            }
             //capturing
-            if (result == 2)
+            else if (result == 2)
             {
                 middlePiece = CapturePiece(x, y);
             }

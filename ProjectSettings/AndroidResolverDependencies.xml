@@ -6,11 +6,13 @@
     <package>com.google.firebase:firebase-auth:22.1.2</package>
     <package>com.google.firebase:firebase-auth-unity:11.6.0</package>
     <package>com.google.firebase:firebase-common:20.3.3</package>
+    <package>com.google.firebase:firebase-database:20.2.2</package>
+    <package>com.google.firebase:firebase-database-unity:11.6.0</package>
   </packages>
   <files />
   <settings>
     <setting name="androidAbis" value="armeabi-v7a" />
-    <setting name="bundleId" value="com.shayanfaysal.checkers" />
+    <setting name="bundleId" value="com.stax3.Checkers" />
     <setting name="explodeAars" value="True" />
     <setting name="gradleBuildEnabled" value="True" />
     <setting name="gradlePropertiesTemplateEnabled" value="False" />
