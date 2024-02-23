@@ -208,20 +208,24 @@ public class Board : MonoBehaviour
             //normal move
             if (result == 1)
             {
+                AudioManager.instance.PlayMoveSound();
             }
             //capturing
             else if (result == 2)
             {
+                AudioManager.instance.PlayCaptureSound();
                 middlePiece = CapturePiece(x, y);
             }
             //promoting
             else if (result == 3)
             {
+                AudioManager.instance.PlayMoveSound();
                 promoted = PromoteToKing(y);
             }
             //capturing and promoting
             else if (result == 4)
             {
+                AudioManager.instance.PlayCaptureSound();
                 middlePiece = CapturePiece(x, y);
                 promoted = PromoteToKing(y);
             }

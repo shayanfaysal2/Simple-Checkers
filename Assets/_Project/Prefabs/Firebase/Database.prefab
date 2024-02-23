@@ -1,0 +1,117 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &1458824030362502338
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 8794806928610877477}
+  - component: {fileID: 2154836507838753417}
+  - component: {fileID: 516736494277031442}
+  m_Layer: 0
+  m_Name: Database
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &8794806928610877477
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1458824030362502338}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2154836507838753417
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1458824030362502338}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 945e226f1c993f54bb1e44a0a98d9442, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!114 &516736494277031442
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1458824030362502338}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b27a79c8090b4e7d8f92c0e326e9ff07, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _dataPaths:
+  - PathToDataName: users
+    Root: users
+    PathList:
+    - PathName: users
+      IsId: 0
+  - PathToDataName: userId
+    Root: users
+    PathList:
+    - PathName: users
+      IsId: 0
+    - PathName: id
+      IsId: 1
+  - PathToDataName: Name
+    Root: users
+    PathList:
+    - PathName: users
+      IsId: 0
+    - PathName: id
+      IsId: 1
+    - PathName: Name
+      IsId: 0
+  - PathToDataName: Email
+    Root: users
+    PathList:
+    - PathName: users
+      IsId: 0
+    - PathName: id
+      IsId: 1
+    - PathName: Email
+      IsId: 0
+  - PathToDataName: Progress
+    Root: users
+    PathList:
+    - PathName: users
+      IsId: 0
+    - PathName: id
+      IsId: 1
+    - PathName: Progress
+      IsId: 0
+  - PathToDataName: Level
+    Root: users
+    PathList:
+    - PathName: users
+      IsId: 0
+    - PathName: id
+      IsId: 1
+    - PathName: Level
+      IsId: 0
+  - PathToDataName: Coins
+    Root: users
+    PathList:
+    - PathName: users
+      IsId: 0
+    - PathName: id
+      IsId: 1
+    - PathName: Coins
+      IsId: 0

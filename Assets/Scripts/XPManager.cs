@@ -42,17 +42,18 @@ public class XPManager : MonoBehaviour
 
     public void CalculateXP(bool win)
     {
-        //Total move points gained at the end of each game = (normal + capturing) ^ 0.3
-        int totalPoints = (int)Mathf.Pow(points, 0.3f);
-        print("Total Points: " + totalPoints);
-
         int level = FirebaseDBManager.instance.playerData.level;
+        int totalPoints = 0;
         int xpGain = 0;
 
         if (win)
         {
             //Win = 10 points
             points += 10;
+
+            //total points
+            totalPoints = CalculateTotalPoints();
+            print("Total Points: " + totalPoints);
 
             //If the player wins then =((total points + 10) ^ 0.9) + no. levels
             xpGain = ((int)Mathf.Pow(totalPoints + 10, 0.9f) + level);
@@ -61,6 +62,10 @@ public class XPManager : MonoBehaviour
         {
             //Lose = 5 points
             points += 5;
+
+            //total points
+            totalPoints = CalculateTotalPoints();
+            print("Total Points: " + totalPoints);
 
             //If the player loses then =((total points + 5) ^ 0.9) / no. levels
             xpGain = ((int)Mathf.Pow(totalPoints + 5, 0.9f) / level);
@@ -84,7 +89,13 @@ public class XPManager : MonoBehaviour
         }
     }
 
-    int GetXPBracket(int level)
+    int CalculateTotalPoints()
+    {
+        //Total move points gained at the end of each game = (normal + capturing) ^ 0.3
+        return (int)Mathf.Pow(points, 0.3f);
+    }
+
+    public int GetXPBracket(int level)
     {
         return (int)Mathf.Pow(level / 0.2f, 2);
     }

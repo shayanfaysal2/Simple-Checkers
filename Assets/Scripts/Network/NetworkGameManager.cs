@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using TMPro;
 using Unity.Netcode;
 using System;
 using UnityEngine.SceneManagement;
@@ -26,12 +27,13 @@ public class NetworkGameManager : NetworkBehaviour
     private int whiteScore = 0;
     private int blackScore = 0;
 
+    [SerializeField] private GameObject gamePanel;
     [SerializeField] private GameObject moveEndPanel;
     [SerializeField] private GameObject gameOverPanel;
-    [SerializeField] private Text winnerText;
-    [SerializeField] private Text turnText;
-    [SerializeField] private Text blackScoreText;
-    [SerializeField] private Text whiteScoreText;
+    [SerializeField] TextMeshProUGUI winnerText;
+    [SerializeField] TextMeshProUGUI turnText;
+    [SerializeField] TextMeshProUGUI blackScoreText;
+    [SerializeField] TextMeshProUGUI whiteScoreText;
 
     private void Awake()
     {
@@ -54,13 +56,13 @@ public class NetworkGameManager : NetworkBehaviour
         {
             print("Black's turn");
             turnText.text = "Black's turn";
-            turnText.color = Color.black;
+            //turnText.color = Color.black;
         }
         else
         {
             print("White's turn");
             turnText.text = "White's turn";
-            turnText.color = Color.white;
+            //turnText.color = Color.white;
         }
     }
 
@@ -134,15 +136,17 @@ public class NetworkGameManager : NetworkBehaviour
     public void Win(Piece.PieceType pieceType)
     {
         gameOver = true;
+        AudioManager.instance.PlayWinSound();
         turnText.gameObject.SetActive(false);
+        gamePanel.SetActive(false);
         if (pieceType == Piece.PieceType.black)
         {
-            winnerText.color = Color.black;
+            //winnerText.color = Color.black;
             winnerText.text = "Black WON!";
         }
         else
         {
-            winnerText.color = Color.white;
+            //winnerText.color = Color.white;
             winnerText.text = "White WON!";
         }
         gameOverPanel.SetActive(true);
@@ -151,10 +155,14 @@ public class NetworkGameManager : NetworkBehaviour
         if (pieceType == playerTurn)
         {
             FirebaseDBManager.instance.IncreasePlayerWins();
+            XPManager.instance.CalculateXP(true);
+            AchievementManager.WonGame();
         }
         else
         {
             FirebaseDBManager.instance.IncreasePlayerLosses();
+            XPManager.instance.CalculateXP(false);
+            AchievementManager.LostGame();
         }
     }
 
@@ -191,6 +199,7 @@ public class NetworkGameManager : NetworkBehaviour
     [ClientRpc]
     void StartGameClientRpc()
     {
+        gamePanel.SetActive(true);
         board.gameObject.SetActive(true);
         board.InitializeBoard();
         UpdateTurnText();
@@ -224,6 +233,7 @@ public class NetworkGameManager : NetworkBehaviour
 
     public void GoToMenu()
     {
+        NetworkManager.Shutdown();
         SceneManager.LoadScene(0);
     }
 }

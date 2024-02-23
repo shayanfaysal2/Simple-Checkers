@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
+using TMPro;
 
 public class GameManager : MonoBehaviour
 {
@@ -24,12 +25,13 @@ public class GameManager : MonoBehaviour
     public Piece.PieceType turn = Piece.PieceType.black;
     [HideInInspector] public bool moved = false;
 
+    [SerializeField] private GameObject gamePanel;
     [SerializeField] private GameObject moveEndPanel;
     [SerializeField] private GameObject gameOverPanel;
-    [SerializeField] private Text winnerText;
-    [SerializeField] private Text turnText;
-    [SerializeField] private Text blackScoreText;
-    [SerializeField] private Text whiteScoreText;
+    [SerializeField] private TextMeshProUGUI winnerText;
+    [SerializeField] private TextMeshProUGUI turnText;
+    [SerializeField] private TextMeshProUGUI blackScoreText;
+    [SerializeField] private TextMeshProUGUI whiteScoreText;
     [SerializeField] private Board board;
 
     private int whiteScore = 0;
@@ -65,17 +67,24 @@ public class GameManager : MonoBehaviour
             board.AITurn();
     }
 
+    private void Update()
+    {
+        //DEBUG
+        if (Input.GetKeyDown(KeyCode.Alpha1))
+            Win(turn);
+    }
+
     void UpdateTurnText()
     {
         if (turn == Piece.PieceType.black)
         {
             turnText.text = "Black's turn";
-            turnText.color = Color.black;
+            //turnText.color = Color.black;
         }
         else
         {
             turnText.text = "White's turn";
-            turnText.color = Color.white;
+            //turnText.color = Color.white;
         }
     }
 
@@ -159,15 +168,17 @@ public class GameManager : MonoBehaviour
     public void Win(Piece.PieceType pieceType)
     {
         gameOver = true;
+        AudioManager.instance.PlayWinSound();
         turnText.gameObject.SetActive(false);
+        gamePanel.SetActive(false);
         if (pieceType == Piece.PieceType.black)
         {
-            winnerText.color = Color.black;
+            //winnerText.color = Color.black;
             winnerText.text = "Black WON!";
         }
         else
         {
-            winnerText.color = Color.white;
+            //winnerText.color = Color.white;
             winnerText.text = "White WON!";
         }
         gameOverPanel.SetActive(true);
@@ -179,11 +190,13 @@ public class GameManager : MonoBehaviour
             {
                 FirebaseDBManager.instance.IncreasePlayerWins();
                 XPManager.instance.CalculateXP(true);
+                AchievementManager.WonGame();
             }
             else
             {
                 FirebaseDBManager.instance.IncreasePlayerLosses();
                 XPManager.instance.CalculateXP(false);
+                AchievementManager.LostGame();
             }
         }
     }

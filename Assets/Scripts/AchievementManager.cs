@@ -9,6 +9,8 @@ public class AchievementManager : MonoBehaviour
 
     public Achievement[] achievements;
 
+    [HideInInspector] public int gamesWonInRow = 0;
+
     private void Awake()
     {
         if (instance == null)
@@ -32,6 +34,23 @@ public class AchievementManager : MonoBehaviour
         EventManager.OnAchievementUnlock -= UnlockAchievement;
     }
 
+    public static void WonGame()
+    {
+        instance.gamesWonInRow++;
+
+        if (instance.gamesWonInRow == 2)
+            UnlockAchievement("win_2_games_in_row");
+        else if (instance.gamesWonInRow == 5)
+            UnlockAchievement("win_5_games_in_row");
+        else if (instance.gamesWonInRow == 10)
+            UnlockAchievement("win_10_games_in_row");
+    }
+
+    public static void LostGame()
+    {
+        instance.gamesWonInRow = 0;
+    }
+
     private static void UnlockAchievement(string achievementId)
     {
         //check if achievement is valid
@@ -49,7 +68,9 @@ public class AchievementManager : MonoBehaviour
             print("Achivement unlocked: " + achievementId);
 
             //give reward
-            //print("Reward: " + achievement.rewards[0]);
+            if (achievement.rewards != null)
+                foreach(Reward reward in achievement.rewards)
+                    print("Reward: " + reward);
         }
         else
         {
@@ -60,5 +81,10 @@ public class AchievementManager : MonoBehaviour
     public static bool IsAchievementUnlocked(string achievementId)
     {
         return (FirebaseDBManager.instance.IsAchievementUnlocked(achievementId));
+    }
+
+    public static Achievement GetAchievement(string achievementId)
+    {
+        return instance.achievements.FirstOrDefault(obj => obj.id == achievementId);
     }
 }

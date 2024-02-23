@@ -34,7 +34,7 @@ public class FirebaseDBManager : MonoBehaviour
         DontDestroyOnLoad(gameObject);
     }
 
-    void Start()
+    IEnumerator Start()
     {
         FirebaseApp.CheckAndFixDependenciesAsync().ContinueWithOnMainThread(task => {
             dependencyStatus = task.Result;
@@ -47,6 +47,11 @@ public class FirebaseDBManager : MonoBehaviour
                 Debug.LogError("Could not resolve all Firebase dependencies: " + dependencyStatus);
             }
         });
+
+        yield return new WaitForSeconds(1);
+
+        LoadPlayerData();
+        LoadLeaderboard();
     }
 
     // Initialize the Firebase database:
@@ -54,9 +59,6 @@ public class FirebaseDBManager : MonoBehaviour
     {
         FirebaseApp app = FirebaseApp.DefaultInstance;
         databaseReference = FirebaseDatabase.DefaultInstance.RootReference;
-
-        LoadPlayerData();
-        LoadLeaderboard();
     }
 
     [ContextMenu("IncreasePlayerWins")]
@@ -141,11 +143,12 @@ public class FirebaseDBManager : MonoBehaviour
         if (playerData == null)
         {
             playerData = new PlayerData();
-            playerData.displayName = FirebaseAuthenticator.Instance.DisplayName;
         }
 
+        playerData.displayName = FirebaseAuthenticatorHandler.Instance.DisplayName;
+
         string json = JsonConvert.SerializeObject(playerData);
-        databaseReference.Child("Users").Child(FirebaseAuthenticator.Instance.UserId).SetRawJsonValueAsync(json);
+        databaseReference.Child("Users").Child(FirebaseAuthenticatorHandler.Instance.UserId).SetRawJsonValueAsync(json);
         print("User data saved successfully!");
 
         LoadPlayerData();
@@ -159,7 +162,7 @@ public class FirebaseDBManager : MonoBehaviour
 
     IEnumerator LoadDataEnum()
     {
-        var serverData = databaseReference.Child("Users").Child(FirebaseAuthenticator.Instance.UserId).GetValueAsync();
+        var serverData = databaseReference.Child("Users").Child(FirebaseAuthenticatorHandler.Instance.UserId).GetValueAsync();
         yield return new WaitUntil(predicate: () => serverData.IsCompleted);
 
         DataSnapshot snapshot = serverData.Result;
@@ -207,6 +210,7 @@ public class FirebaseDBManager : MonoBehaviour
             //sorting in decsending order
             Array.Sort(leaderboard, (x, y) => y.wins.CompareTo(x.wins));
 
+            EventManager.FetchLeaderboardSuccessful();
             print("Leaderboard loaded successfully!");
         }
         else
